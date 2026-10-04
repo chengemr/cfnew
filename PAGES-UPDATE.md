@@ -8,6 +8,14 @@ Direct Upload 项目可按原项目流程上传 `_worker.js`；Git 集成项目�
 本仓库的修改不自行部署 Cloudflare，也不修改现有 KV 数据。部署后检查管理页、配置
 保存、订阅更新、DNS 缓存与实际客户端连接；异常时使用原项目部署回滚。
 
+## 下载部署 ZIP
+
+登录 GitHub，进入仓库 **Actions → Generate and Obfuscate Worker Script**，
+打开与目标分支和提交对应的成功运行，在 **Artifacts** 下载 `cfnew-pages-<提交 SHA>`。
+下载文件为 ZIP，根目录只有 `_worker.js`，可用于 Pages Direct Upload。
+产物保留 30 天，过期后可在目标分支重新运行该工作流生成。
+部署 ZIP 不包含生产变量、KV 数据或本地配置。Git 集成项目继续使用 Git 部署流程。
+
 ## 保留与改进
 
 - 保留原环境变量及 KV `c` / `c_ver` 格式，不需要数据迁移。
