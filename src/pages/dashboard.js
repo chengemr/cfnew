@@ -57,7 +57,7 @@ export function renderDashboard(request, token, { config = defaults, kvEnabled =
   <a class="brand" href="#subscription"><span class="brand-icon">${logo}</span><span><span class="brand-name">CFnew</span><span class="brand-caption">CONNECTION CONSOLE</span></span></a>
   <p class="nav-caption">${t('工作空间', 'فضای کار')}</p>
   <nav class="nav" aria-label="${t('主导航', 'ناوبری اصلی')}">${Object.entries(titles).map(([id, title]) => `<a href="#${id}" data-nav="${id}">${icon(id)}<span>${title}</span></a>`).join('')}</nav>
-  <div class="sidebar-footer"><a href="https://github.com/byJoey/cfnew" target="_blank" rel="noopener noreferrer">${t('项目与文档', 'پروژه و مستندات')} ↗</a><span class="version">v3.1 · UI 2026.10</span></div>
+  <div class="sidebar-footer"><a href="https://github.com/byJoey/cfnew" target="_blank" rel="noopener noreferrer">${t('项目与文档', 'پروژه و مستندات')} ↗</a><span class="version">v4.0.0 · UI 2026.10</span></div>
 </aside>
 <div class="shell">
   <header class="topbar"><div class="breadcrumb"><span>CFnew</span><span>/</span><strong id="breadcrumb">${titles.subscription}</strong></div>
