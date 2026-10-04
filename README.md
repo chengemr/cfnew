@@ -19,6 +19,24 @@
 
 [Telegram 交流群](https://t.me/+ft-zI76oovgwNmRh)
 
+
+## 开发源码与 Work 优化版
+
+维护源码位于 `src/`，根目录的 `明文源吗` 与 `少年你相信光吗` 是生成的可独立部署 Worker。
+原有环境变量、KV 绑定 `C`、客户端订阅与轻量版入口继续保留。修改模块后执行：
+
+```sh
+npm ci
+npm run build
+npm run obfuscate
+npm run check
+npm run test:all
+```
+
+开发、模块说明与可选浏览器／原生内核检查见 [CONTRIBUTING.md](CONTRIBUTING.md)，
+Pages 更新和兼容性限制见 [PAGES-UPDATE.md](PAGES-UPDATE.md)。
+上述本地检查不能替代实际 Cloudflare 部署与客户端连接验收。
+
 ## 主要功能
 
 - 多协议支持：VLESS、Trojan、xhttp，可以同时启用多个
