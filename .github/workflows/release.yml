@@ -1,0 +1,74 @@
+name: Publish GitHub Release
+
+on:
+  push:
+    tags: ['*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Validate release version and notes
+        id: release
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import { readFileSync, appendFileSync, accessSync } from 'node:fs';
+          const { version } = JSON.parse(readFileSync('package.json', 'utf8'));
+          assert.ok([version, `v${version}`].includes(process.env.GITHUB_REF_NAME),
+            'The tag must match the package version');
+          accessSync(`release-notes/v${version}.md`);
+          appendFileSync(process.env.GITHUB_OUTPUT, `version=${version}\n`);
+          JS
+      - run: npm ci
+      - run: npm run check
+      - run: npm run test:all
+      - name: Prepare deployment files
+        run: |
+          mkdir -p release-assets
+          cp '明文源吗' release-assets/_worker.js
+          cp '少年你相信光吗' release-assets/_worker.obfuscated.js
+          cd release-assets
+          zip -q Pages.zip _worker.js
+          sha256sum Pages.zip _worker.js _worker.obfuscated.js > SHA256SUMS.txt
+      - name: Upload files to a draft release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: CFnew v${{ steps.release.outputs.version }}
+          body_path: release-notes/v${{ steps.release.outputs.version }}.md
+          draft: true
+          prerelease: false
+          fail_on_unmatched_files: true
+          files: |
+            release-assets/Pages.zip
+            release-assets/_worker.js
+            release-assets/_worker.obfuscated.js
+            release-assets/SHA256SUMS.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Verify uploaded files and publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --dir release-download
+          cmp release-assets/SHA256SUMS.txt release-download/SHA256SUMS.txt
+          cd release-download
+          sha256sum --check SHA256SUMS.txt
+          python3 - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile
+          with ZipFile('Pages.zip') as archive:
+              assert archive.namelist() == ['_worker.js'], 'Unexpected Pages ZIP contents'
+              assert archive.read('_worker.js') == Path('_worker.js').read_bytes()
+          PY
+          gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest
