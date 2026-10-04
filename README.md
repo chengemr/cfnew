@@ -1,4 +1,4 @@
-# CFnew - 终端 v3.1
+# CFnew - 终端 v4.0.0
 
 > **⚠️ 重要：部署后请将兼容日期设置为 `2026-01-20`**
 >
@@ -19,6 +19,24 @@
 
 [Telegram 交流群](https://t.me/+ft-zI76oovgwNmRh)
 
+
+## 开发源码与 Work 优化版
+
+维护源码位于 `src/`，根目录的 `明文源吗` 与 `少年你相信光吗` 是生成的可独立部署 Worker。
+原有环境变量、KV 绑定 `C`、客户端订阅与轻量版入口继续保留。修改模块后执行：
+
+```sh
+npm ci
+npm run build
+npm run obfuscate
+npm run check
+npm run test:all
+```
+
+开发、模块说明与可选浏览器／原生内核检查见 [CONTRIBUTING.md](CONTRIBUTING.md)，
+Pages 更新和兼容性限制见 [PAGES-UPDATE.md](PAGES-UPDATE.md)。
+上述本地检查不能替代实际 Cloudflare 部署与客户端连接验收。
+
 ## 主要功能
 
 - 多协议支持：VLESS、Trojan、xhttp，可以同时启用多个
@@ -31,6 +49,14 @@
 - 应用唤醒：点按钮自动打开对应客户端
 - 自动识别：根据User-Agent自动返回对应格式
 - 多语言：支持中文和波斯语，根据浏览器语言自动切换
+
+## v4.0.0 更新
+
+- 引入 Work 优化版管理页面，支持移动端、中文／波斯语、差量保存和失败重试。
+- 维护源码模块化，增加可复现的单文件构建、回归检查和 Pages 部署 ZIP。
+- 修复 KV 配置保护、IPv6／端口解析、Clash／Sing-box DNS、连接清理和请求超时问题。
+- 仅启用 XHTTP 时，原生订阅继续可用；不支持 XHTTP 的转换格式返回明确提示。
+- 基于原版 v3.1，保留环境变量、KV 数据格式、轻量版和原部署方式，无需迁移配置。
 
 ## v3.1 更新
 

@@ -1,0 +1,23 @@
+{
+  "name": "cfnew",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "obfuscate": "node scripts/obfuscate.mjs",
+    "check": "node scripts/build.mjs --check && node scripts/obfuscate.mjs --check",
+    "test": "node scripts/test.mjs",
+    "test:all": "node scripts/test.mjs 明文源吗 少年你相信光吗",
+    "test:mihomo": "node --experimental-vm-modules --test tests/integration/mihomo-dns.test.mjs",
+    "test:browser": "node --experimental-vm-modules --test tests/browser/*.test.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "javascript-obfuscator": "5.9.0",
+    "yaml": "2.9.1"
+  },
+  "version": "4.0.0"
+}
