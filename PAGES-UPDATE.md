@@ -12,6 +12,13 @@ Direct Upload 项目可按原项目流程上传 `_worker.js`；Git 集成项目�
 
 ## 下载部署 ZIP
 
+正式版本在 [GitHub Releases](https://github.com/chengemr/cfnew/releases) 下载。
+选择目标版本，下载 **Pages.zip**；同一 Release 还提供明文 `_worker.js`、
+混淆 `_worker.obfuscated.js` 和 `SHA256SUMS.txt`。正式发布文件不受 Actions
+产物的 30 天保留期限限制；GitHub 自动附带的 Source code 是开发源码，不是 Pages 部署包。
+
+开发分支的部署包可从 Actions 获取：
+
 登录 GitHub，进入仓库 **Actions → Generate and Obfuscate Worker Script**，
 打开与目标分支和提交对应的成功运行，在 **Artifacts** 下载 `cfnew-pages-<提交 SHA>`。
 下载文件为 ZIP，根目录只有 `_worker.js`，可用于 Pages Direct Upload。
