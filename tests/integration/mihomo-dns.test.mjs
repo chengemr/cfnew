@@ -58,6 +58,12 @@ async function startCore(t, config) {
   config['external-controller'] = `127.0.0.1:${controllerPort}`;
   config['mixed-port'] = port;
   await writeFile(join(directory, 'config.yaml'), stringify(config));
+  // Providers can be visible while the tunnel is still suspended during startup.
+  // A raw-IP probe avoids querying the DNS fixtures under test.
+  const readiness = createServer((_request, response) => { response.writeHead(204); response.end(); });
+  readiness.listen(0, '127.0.0.1');
+  await once(readiness, 'listening');
+  t.after(() => new Promise(resolve => readiness.close(resolve)));
   const child = spawn(resolve(binary), ['-d', directory, '-f', join(directory, 'config.yaml')]);
   let log = '';
   child.stdout.on('data', chunk => { log += chunk; });
@@ -93,7 +99,21 @@ async function startCore(t, config) {
         return active && group.proxies.every(name => active.all?.includes(name))
           && (!group.proxies.length || active.all.includes(active.now));
       });
-      if (proxies && groupsReady) return port;
+      if (proxies && groupsReady) {
+        const tunnelReady = await new Promise(resolve => {
+          const req = get({ host: '127.0.0.1', port, agent: false,
+            path: `http://127.0.0.1:${readiness.address().port}/`,
+            headers: { Host: `127.0.0.1:${readiness.address().port}` }
+          }, response => {
+            response.resume();
+            response.on('end', () => resolve(response.statusCode === 204));
+            response.on('error', () => resolve(false));
+          });
+          req.on('error', () => resolve(false));
+          req.setTimeout(500, () => { req.destroy(); resolve(false); });
+        });
+        if (tunnelReady) return port;
+      }
     }
     await delay(20);
   }
