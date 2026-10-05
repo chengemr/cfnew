@@ -2987,8 +2987,6 @@ function 取官方直连地址() {
   const 命中 = 官方直连地址[Math.floor(Math.random() * 官方直连地址.length)];
   return {
     domain: 命中,
-    region: "CF",
-    regionCode: "CF",
     port: 443
   };
 }
@@ -3084,11 +3082,10 @@ var worker_default = {
       const 是否网页套接字 = 请求735.headers.get("Upgrade") === "websocket";
       const 是否值732 = 请求735.method === "POST";
       const 请求网址731 = new URL(请求735.url);
-      const 路径值730 = 请求网址731.pathname.split("/").filter((参数值729) => 参数值729);
       if (!(本地值734.C || 本地值734.c) && !是否网页套接字 && !是否值732 && 请求网址731.pathname !== "/") {
         const 值值728 = (本地值734.u || 本地值734.U || "").toLowerCase();
         const 值值727 = (本地值734.d || 本地值734.D || "").toLowerCase();
-        const 首次值 = 路径值730[0] || "";
+        const 首次值 = 请求网址731.pathname.split("/").filter(Boolean)[0] || "";
         const 清理值 = normalizePath(值值727);
         const 请求路径 = 请求网址731.pathname.toLowerCase();
         const 自定义路径匹配 = 请求路径 === 清理值 || 请求路径.startsWith(清理值 + "/");
@@ -3101,8 +3098,7 @@ var worker_default = {
       const store = getConfigStore(本地值734.C || 本地值734.c);
       const stored = store ? await store.load() : {};
       const settings = createSettings(本地值734, stored);
-      const 网址698 = 请求网址731;
-      const 管理路由 = resolveManagementRoute(网址698.pathname, settings.自定义路径, settings.认证令牌);
+      const 管理路由 = resolveManagementRoute(请求网址731.pathname, settings.自定义路径, settings.认证令牌);
       if (管理路由 === "config") return await handleConfig(请求735, 本地值734, store, stored);
       if (管理路由 === "preferred") return await handlePreferred(请求735, 本地值734, store, stored);
       if (管理路由 === "invalid-api" && !是否网页套接字) return Response.json({ error: "Not Found" }, { status: 404 });
@@ -3149,7 +3145,7 @@ var worker_default = {
         if (管理路由 === "test") {
           return Response.json({ detectedRegion: "CF", message: "API测试完成", timestamp: (/* @__PURE__ */ new Date()).toISOString() });
         }
-        if (网址698.pathname === "/") {
+        if (请求网址731.pathname === "/") {
           const 自定义值 = settings.config.homepage;
           if (自定义值 && 自定义值.trim()) {
             try {
@@ -3183,7 +3179,7 @@ var worker_default = {
           config: settings.config,
           kvEnabled: Boolean(store)
         });
-        if (管理路由 === "subscription") return await 处理订阅请求(settings, 请求735, settings.认证令牌, 网址698);
+        if (管理路由 === "subscription") return await 处理订阅请求(settings, 请求735, settings.认证令牌, 请求网址731);
         if (管理路由 === "denied") {
           return Response.json({ error: "访问被拒绝", message: settings.自定义路径 ? "当前 Worker 已启用自定义路径模式，UUID 访问已禁用" : "UUID错误" }, { status: 403 });
         }
@@ -3243,99 +3239,61 @@ async function 处理订阅请求(settings, 请求507, 用户506, 网址505 = nu
   }
   const 节点设置 = 不兼容扩展传输 ? { ...settings, 启用扩展传输: false } : settings;
   const 别名命名器502 = createNodeNamer();
-  let 加密客户端问候配置501 = null;
-  if (settings.启用加密客户端问候) {
-    const 域名系统值500 = settings.自定义域名系统 || "https://223.5.5.5/dns-query";
-    const 加密客户端问候域名499 = settings.自定义加密客户端问候域名 || "cloudflare-ech.com";
-    加密客户端问候配置501 = `${加密客户端问候域名499}+${域名系统值500}`;
+  const 客户端配置 = { dns: settings.自定义域名系统, echDomain: settings.自定义加密客户端问候域名 };
+  function 添加节点(列表, 显式端口 = false) {
+    最终链接列表.push(...generateNodeLinks(节点设置, 列表, 用户506, 工作器域名504, 别名命名器502, 显式端口));
   }
-  function 添加节点列表来源列表(列表) {
-    最终链接列表.push(...generateNodeLinks(节点设置, 列表, 用户506, 工作器域名504, 别名命名器502));
+  async function 添加备用节点() {
+    const 备用 = await 获取值备用地址(settings.当前工作器地区, settings.启用地区匹配);
+    添加节点([{ ip: 备用.domain, isp: "ProxyIP-" + settings.当前工作器地区 }]);
   }
   if (settings.启用原生地址) {
-    if (settings.当前工作器地区 === "CUSTOM") {
-      const 原生列表497 = [{
-        ip: 工作器域名504,
-        isp: "原生地址"
-      }];
-      添加节点列表来源列表(原生列表497);
-    } else {
-      try {
-        const 原生列表496 = [{
-          ip: 工作器域名504,
-          isp: "原生地址"
-        }];
-        添加节点列表来源列表(原生列表496);
-      } catch {
-        const 值备用地址494 = await 获取值备用地址(settings.当前工作器地区, settings.启用地区匹配);
-        if (值备用地址494) {
-          const 备用列表493 = [{
-            ip: 值备用地址494.domain,
-            isp: "ProxyIP-" + settings.当前工作器地区
-          }];
-          添加节点列表来源列表(备用列表493);
-        } else {
-          const 原生列表 = [{
-            ip: 工作器域名504,
-            isp: "原生地址"
-          }];
-          添加节点列表来源列表(原生列表);
-        }
-      }
+    try {
+      添加节点([{ ip: 工作器域名504, isp: "原生地址" }]);
+    } catch (错误) {
+      if (settings.当前工作器地区 === "CUSTOM") throw 错误;
+      await 添加备用节点();
     }
   }
   const 是否有自定义优选 = settings.自定义优选地址列表.length > 0 || settings.自定义优选域名列表.length > 0;
-  if (settings.禁用优选) {
-  } else if (是否有自定义优选) {
-    if (settings.自定义优选地址列表.length > 0 && settings.启用优选地址) {
-      添加节点列表来源列表(settings.自定义优选地址列表);
-    }
-    if (settings.自定义优选域名列表.length > 0 && settings.启用优选域名) {
-      const 自定义域名列表 = settings.自定义优选域名列表.map((丁值492) => ({
-        ip: 丁值492.domain,
-        port: 丁值492.port,
-        isp: 丁值492.name || 丁值492.domain
-      }));
-      添加节点列表来源列表(自定义域名列表);
-    }
-  } else {
-    if (settings.启用优选域名) {
-      const 域名列表 = 直连域名列表.map((ip) => ({ ip, isp: ip }));
-      添加节点列表来源列表(域名列表);
-    }
-    if (settings.启用优选地址) {
-      if (!settings.优选地址源) {
-        try {
-          const 值地址列表490 = await 获取值地址列表(settings);
-          if (值地址列表490.length > 0) {
-            添加节点列表来源列表(值地址列表490);
-          }
-        } catch {
-          const 值备用地址488 = await 获取值备用地址(settings.当前工作器地区, settings.启用地区匹配);
-          if (值备用地址488) {
-            const 备用列表487 = [{
-              ip: 值备用地址488.domain,
-              isp: "ProxyIP-" + settings.当前工作器地区
-            }];
-            添加节点列表来源列表(备用列表487);
+  if (!settings.禁用优选) {
+    if (是否有自定义优选) {
+      if (settings.自定义优选地址列表.length > 0 && settings.启用优选地址) {
+        添加节点(settings.自定义优选地址列表);
+      }
+      if (settings.自定义优选域名列表.length > 0 && settings.启用优选域名) {
+        const 自定义域名列表 = settings.自定义优选域名列表.map((丁值492) => ({
+          ip: 丁值492.domain,
+          port: 丁值492.port,
+          isp: 丁值492.name || 丁值492.domain
+        }));
+        添加节点(自定义域名列表);
+      }
+    } else {
+      if (settings.启用优选域名) {
+        const 域名列表 = 直连域名列表.map((ip) => ({ ip, isp: ip }));
+        添加节点(域名列表);
+      }
+      if (settings.启用优选地址) {
+        if (!settings.优选地址源) {
+          try {
+            const 值地址列表490 = await 获取值地址列表(settings);
+            if (值地址列表490.length > 0) {
+              添加节点(值地址列表490);
+            }
+          } catch {
+            await 添加备用节点();
           }
         }
       }
-    }
-    if (settings.启用仓库优选) {
-      try {
-        const 新地址列表 = await 获取值解析新地址列表(settings);
-        if (新地址列表.length > 0) {
-          最终链接列表.push(...generateNodeLinks(节点设置, 新地址列表, 用户506, 工作器域名504, 别名命名器502, true));
-        }
-      } catch {
-        const 值备用地址485 = await 获取值备用地址(settings.当前工作器地区, settings.启用地区匹配);
-        if (值备用地址485) {
-          const 备用列表 = [{
-            ip: 值备用地址485.domain,
-            isp: "ProxyIP-" + settings.当前工作器地区
-          }];
-          添加节点列表来源列表(备用列表);
+      if (settings.启用仓库优选) {
+        try {
+          const 新地址列表 = await 获取值解析新地址列表(settings);
+          if (新地址列表.length > 0) {
+            添加节点(新地址列表, true);
+          }
+        } catch {
+          await 添加备用节点();
         }
       }
     }
@@ -3354,14 +3312,14 @@ async function 处理订阅请求(settings, 请求507, 用户506, 网址505 = nu
     case "stash":
     case "meta":
     case "clashmeta":
-      订阅内容 = generateClash(最终链接列表, { dns: settings.自定义域名系统, echDomain: settings.自定义加密客户端问候域名 });
+      订阅内容 = generateClash(最终链接列表, 客户端配置);
       内容类型483 = "text/yaml; charset=utf-8";
       break;
     case "vg":
     case "jk":
     case "jiakuan":
       try {
-        订阅内容 = await generateResidential(最终链接列表, { dns: settings.自定义域名系统, echDomain: settings.自定义加密客户端问候域名 });
+        订阅内容 = await generateResidential(最终链接列表, 客户端配置);
       } catch (错误) {
         return new Response("家宽节点暂时拉不到：" + (错误 && 错误.message ? 错误.message : 错误) + "\n过几分钟再更新，客户端会先用着上一份。", {
           status: 503,
@@ -3374,20 +3332,18 @@ async function 处理订阅请求(settings, 请求507, 用户506, 网址505 = nu
     case "surge2":
     case "surge3":
     case "surge4":
-      订阅内容 = generateSurge(最终链接列表, { dns: settings.自定义域名系统 });
-      内容类型483 = "text/plain; charset=utf-8";
+      订阅内容 = generateSurge(最终链接列表, 客户端配置);
       break;
     case "quantumult":
     case "quanx":
-      订阅内容 = generateQuantumultX(最终链接列表, { dns: settings.自定义域名系统 });
+      订阅内容 = generateQuantumultX(最终链接列表, 客户端配置);
       break;
     case "loon":
-      订阅内容 = generateLoon(最终链接列表, { dns: settings.自定义域名系统 });
-      内容类型483 = "text/plain; charset=utf-8";
+      订阅内容 = generateLoon(最终链接列表, 客户端配置);
       break;
     case "singbox":
     case "sing-box":
-      订阅内容 = generateSingBox(最终链接列表, { dns: settings.自定义域名系统 });
+      订阅内容 = generateSingBox(最终链接列表, 客户端配置);
       内容类型483 = "application/json; charset=utf-8";
       break;
     default:
@@ -3399,9 +3355,7 @@ async function 处理订阅请求(settings, 请求507, 用户506, 网址505 = nu
   };
   if (settings.启用加密客户端问候) {
     响应头部列表["X-ECH-Status"] = "ENABLED";
-    if (加密客户端问候配置501) {
-      响应头部列表["X-ECH-Config-Length"] = String(加密客户端问候配置501.length);
-    }
+    响应头部列表["X-ECH-Config-Length"] = String(`${客户端配置.echDomain}+${客户端配置.dns}`.length);
   }
   return new Response(订阅内容, {
     headers: 响应头部列表
@@ -3563,44 +3517,42 @@ async function 处理网页套接字请求(请求417, 配置快照) {
         if (!处理队列值(数据396)) throw new Error("upload queue overflow");
         return;
       }
-      if (!协议类型) {
-        if (启用明文 && 数据396.byteLength >= 24) {
-          const 轻量协议结果 = 解析网页套接字值头部(数据396, 认证令牌);
-          if (!轻量协议结果.hasError) {
-            协议类型 = "vless";
-            const {
-              port: 端口394,
-              hostname: 主机名393,
-              rawIndex: 原始索引,
-              version: 本地值392,
-              isUDP: 是否用户数据报391
-            } = 轻量协议结果;
-            if (是否用户数据报391) {
-              if (端口394 === 53) 是否域名系统值 = true;
-              else throw new Error(错误_仅支持域名系统用户数据报);
-            }
-            const 值头部390 = new Uint8Array([本地值392[0], 0]);
-            const 原始数据389 = 数据396.subarray(原始索引);
-            if (是否域名系统值) return 处理值用户数据报(原始数据389, 值值410, 值头部390, 请求值407);
-            await 连接网页套接字TCP(主机名393, 端口394, 原始数据389, 值值410, 值头部390, 远程连接值409, 请求回退416, 实际地区411, 请求值414, 请求代理配置413, 请求值407, 配置快照);
-            return;
+      if (启用明文 && 数据396.byteLength >= 24) {
+        const 轻量协议结果 = 解析网页套接字值头部(数据396, 认证令牌);
+        if (!轻量协议结果.hasError) {
+          协议类型 = "vless";
+          const {
+            port: 端口394,
+            hostname: 主机名393,
+            rawIndex: 原始索引,
+            version: 本地值392,
+            isUDP: 是否用户数据报391
+          } = 轻量协议结果;
+          if (是否用户数据报391) {
+            if (端口394 === 53) 是否域名系统值 = true;
+            else throw new Error(错误_仅支持域名系统用户数据报);
           }
+          const 值头部390 = new Uint8Array([本地值392[0], 0]);
+          const 原始数据389 = 数据396.subarray(原始索引);
+          if (是否域名系统值) return 处理值用户数据报(原始数据389, 值值410, 值头部390, 请求值407);
+          await 连接网页套接字TCP(主机名393, 端口394, 原始数据389, 值值410, 值头部390, 远程连接值409, 请求回退416, 实际地区411, 请求值414, 请求代理配置413, 请求值407, 配置快照);
+          return;
         }
-        if (启用木马 && 数据396.byteLength >= 56) {
-          const 值结果 = await 解析木马头部(数据396, 认证令牌, 传输路径);
-          if (!值结果.hasError) {
-            协议类型 = "trojan";
-            const {
-              port: 端口387,
-              hostname: 主机名386,
-              rawClientData: 原始客户端数据
-            } = 值结果;
-            await 连接网页套接字TCP(主机名386, 端口387, 原始客户端数据, 值值410, null, 远程连接值409, 请求回退416, 实际地区411, 请求值414, 请求代理配置413, 请求值407, 配置快照);
-            return;
-          }
-        }
-        throw new Error("Invalid protocol or authentication failed");
       }
+      if (启用木马 && 数据396.byteLength >= 56) {
+        const 值结果 = await 解析木马头部(数据396, 认证令牌, 传输路径);
+        if (!值结果.hasError) {
+          协议类型 = "trojan";
+          const {
+            port: 端口387,
+            hostname: 主机名386,
+            rawClientData: 原始客户端数据
+          } = 值结果;
+          await 连接网页套接字TCP(主机名386, 端口387, 原始客户端数据, 值值410, null, 远程连接值409, 请求回退416, 实际地区411, 请求值414, 请求代理配置413, 请求值407, 配置快照);
+          return;
+        }
+      }
+      throw new Error("Invalid protocol or authentication failed");
     }
   })).catch(关闭传输);
   return new Response(null, {
