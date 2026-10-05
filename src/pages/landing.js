@@ -18,7 +18,7 @@ export function renderLanding(request, customPath = '') {
     </div><p id="connectError" class="error-text small" role="alert" hidden></p>
     <button type="submit" id="connectButton" class="btn primary">${t('进入控制台', 'ورود به پنل')} →</button>
   </form></div></main>
-  <footer class="login-footer">CFnew v4.0.0 <span aria-hidden="true">·</span> <a href="https://github.com/byJoey/cfnew" rel="noreferrer noopener" target="_blank">${t('项目与文档', 'پروژه و مستندات')} ↗</a></footer></div>`;
+  <footer class="login-footer">CFnew v4.0.1 <span aria-hidden="true">·</span> <a href="https://github.com/byJoey/cfnew" rel="noreferrer noopener" target="_blank">${t('项目与文档', 'پروژه و مستندات')} ↗</a></footer></div>`;
   // The public entry page only needs the mode; the management credential stays
   // on the authenticated dashboard and is never embedded in the landing HTML.
   return documentPage({ lang, fa, title: t('连接管理', 'مدیریت اتصال'), body, client,
