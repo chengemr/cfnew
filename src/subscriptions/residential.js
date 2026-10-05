@@ -1,3 +1,4 @@
+import { fetchBytes } from '../http.js';
 import { decodeBase64Text as 解码64 } from '../encoding.js';
 import { parseShareLink as 解析值链接 } from './links.js';
 import { renderClashNode } from './clash.js';
@@ -109,31 +110,19 @@ async function 加载家宽节点() {
   let 原文 = '';
   let 最后错误 = null;
   for (const 源 of [家宽节点源, 家宽节点源.replace(/^https:/, 'http:')]) {
-    const 控制器 = new AbortController();
-    let 超时标识;
-    // 同一截止时间覆盖响应头和正文；即使源未响应 abort，也释放共享加载 Promise。
-    const 超时 = new Promise((_, 拒绝) => {
-      超时标识 = setTimeout(() => {
-        控制器.abort();
-        拒绝(new Error('家宽节点源请求超时'));
-      }, 家宽请求超时);
-    });
     try {
-      const 响应 = await Promise.race([fetch(源, {
-        signal: 控制器.signal,
+      const { response: 响应, bytes } = await fetchBytes(源, {
         headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'text/plain' },
         cf: { cacheTtl: 1800, cacheEverything: true }
-      }), 超时]);
+      }, { timeout: 家宽请求超时, maxBytes: Infinity });
       if (!响应.ok) {
         最后错误 = new Error('节点源返回 ' + 响应.status);
         continue;
       }
-      原文 = await Promise.race([响应.text(), 超时]);
+      原文 = new TextDecoder().decode(bytes);
       break;
     } catch (错误) {
-      最后错误 = 错误;
-    } finally {
-      clearTimeout(超时标识);
+      最后错误 = 错误.name === 'TimeoutError' ? new Error('家宽节点源请求超时') : 错误;
     }
   }
   if (!原文) throw 最后错误 || new Error('节点源没有返回内容');
