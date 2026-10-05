@@ -1,5 +1,6 @@
 import { defaults } from './config.js';
 import { parseProxy } from './transports/proxy.js';
+import { normalizePath } from './router.js';
 
 const switches = new Set(['ev', 'et', 'ex', 'ech', 'ena', 'epd', 'epi', 'egi', 'dkby',
   'ipv4', 'ipv6', 'ispMobile', 'ispUnicom', 'ispTelecom', 'jk', 'ae', 'rm', 'yxby']);
@@ -28,11 +29,15 @@ export function validateConfig(changes) {
     if (key === 's') {
       try { parseProxy(value); } catch { return '无效的上游代理地址'; }
     }
-    if (key === 'd' && (/\s|[?#]/.test(value) || value.includes('//') || value.split('/').some(part => part === '.' || part === '..'))) return '无效的管理路径';
+    if (key === 'd') {
+      const path = normalizePath(value);
+      if (path === '/' || /\s|[?#]/.test(value) || value.includes('//') ||
+        new URL(path, 'https://path.invalid').pathname !== path) return '无效的管理路径';
+    }
   }
   return null;
 }
 
 export function validatePreferredName(name) {
-  return name === undefined || name === '' || (typeof name === 'string' && name.length <= 256 && !/[,#\r\n]/.test(name));
+  return name === undefined || name === null || name === '' || (typeof name === 'string' && name.length <= 256 && !/[,#\r\n]/.test(name));
 }

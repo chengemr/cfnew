@@ -1199,7 +1199,11 @@ async function 处理值隧道连接(地址238值, 端口237值, 代理配置, �
   const 目标地址 = `${目标主机}:${端口237值}`;
   let 请求头 = `${文本_连接方法} ${目标地址}${文本_协议版本}${文本_换行}` + `${文本_主机头}${目标地址}${文本_换行}` + `${文本_用户代理头}${文本_换行}` + `${文本_代理保持}${文本_换行}`;
   if (隧道用户) {
-    请求头 += `${文本_代理认证头}${btoa(String.fromCharCode(...new TextEncoder().encode(`${隧道用户}:${隧道密码 || ''}`)))}${文本_换行}`;
+    const credentials = `${隧道用户}:${隧道密码 || ''}`;
+    let authorization;
+    try { authorization = btoa(credentials); }
+    catch { authorization = btoa(String.fromCharCode(...new TextEncoder().encode(credentials))); }
+    请求头 += `${文本_代理认证头}${authorization}${文本_换行}`;
   }
   请求头 += 文本_换行;
   const 写入器 = 套接字.writable.getWriter();
@@ -1256,20 +1260,22 @@ function 包装残留套接字(套接字, 残留数据) {
       上游读取器 = 套接字.readable.getReader();
     },
     async pull(控制器) {
+      try {
       const {
         value: 分片,
         done: 已结束
       } = await 上游读取器.read();
       if (已结束) {
+        上游读取器.releaseLock();
         控制器.close();
         return;
       }
       控制器.enqueue(分片);
+      } catch (error) { 上游读取器.releaseLock(); throw error; }
     },
-    cancel(原因) {
-      try {
-        上游读取器?.cancel(原因);
-      } catch {}
+    async cancel(原因) {
+      try { await 上游读取器.cancel(原因); }
+      finally { 上游读取器.releaseLock(); }
     }
   });
   return {
