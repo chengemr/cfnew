@@ -31,143 +31,62 @@ function 取官方直连地址() {
     port: 443
   };
 }
-const 备用地址列表 = [{
-  domain: 解码64('UHJveHlJUC5ISy5DTUxpdXNzc3MubmV0'),
-  region: 'HK',
-  regionCode: 'HK',
-  port: 443
-}, {
-  domain: 解码64('UHJveHlJUC5VUy5DTUxpdXNzc3MubmV0'),
-  region: 'US',
-  regionCode: 'US',
-  port: 443
-}, {
-  domain: 解码64('UHJveHlJUC5TRy5DTUxpdXNzc3MubmV0'),
-  region: 'SG',
-  regionCode: 'SG',
-  port: 443
-}, {
-  domain: 解码64('UHJveHlJUC5KUC5DTUxpdXNzc3MubmV0'),
-  region: 'JP',
-  regionCode: 'JP',
-  port: 443
-}, {
-  domain: 解码64('UHJveHlJUC5LUi5DTUxpdXNzc3MubmV0'),
-  region: 'KR',
-  regionCode: 'KR',
-  port: 443
-}, {
-  domain: 解码64('UHJveHlJUC5ERS5DTUxpdXNzc3MubmV0'),
-  region: 'DE',
-  regionCode: 'DE',
-  port: 443
-}, {
-  domain: 解码64('UHJveHlJUC5TRS5DTUxpdXNzc3MubmV0'),
-  region: 'SE',
-  regionCode: 'SE',
-  port: 443
-}, {
-  domain: 解码64('UHJveHlJUC5OTC5DTUxpdXNzc3MubmV0'),
-  region: 'NL',
-  regionCode: 'NL',
-  port: 443
-}, {
-  domain: 解码64('UHJveHlJUC5GSS5DTUxpdXNzc3MubmV0'),
-  region: 'FI',
-  regionCode: 'FI',
-  port: 443
-}, {
-  domain: 解码64('UHJveHlJUC5HQi5DTUxpdXNzc3MubmV0'),
-  region: 'GB',
-  regionCode: 'GB',
-  port: 443
-}, {
-  domain: 解码64('UHJveHlJUC5PcmFjbGUuY21saXVzc3NzLm5ldA=='),
-  region: 'Oracle',
-  regionCode: 'Oracle',
-  port: 443
-}, {
-  domain: 解码64('UHJveHlJUC5EaWdpdGFsT2NlYW4uQ01MaXVzc3NzLm5ldA=='),
-  region: 'DigitalOcean',
-  regionCode: 'DigitalOcean',
-  port: 443
-}, {
-  domain: 解码64('UHJveHlJUC5WdWx0ci5DTUxpdXNzc3MubmV0'),
-  region: 'Vultr',
-  regionCode: 'Vultr',
-  port: 443
-}, {
-  domain: 解码64('UHJveHlJUC5NdWx0YWNvbS5DTUxpdXNzc3MubmV0'),
-  region: 'Multacom',
-  regionCode: 'Multacom',
-  port: 443
-}];
-const 直连域名列表 = [{
-  name: "cloudflare.182682.xyz",
-  domain: "cloudflare.182682.xyz"
-}, {
-  name: "speed.marisalnc.com",
-  domain: "speed.marisalnc.com"
-}, {
-  domain: "freeyx.cloudflare88.eu.org"
-}, {
-  domain: "bestcf.top"
-}, {
-  domain: "cdn.2020111.xyz"
-}, {
-  domain: "cfip.cfcdn.vip"
-}, {
-  domain: "cf.0sm.com"
-}, {
-  domain: "cf.090227.xyz"
-}, {
-  domain: "cf.zhetengsha.eu.org"
-}, {
-  domain: "cloudflare.9jy.cc"
-}, {
-  domain: "cf.zerone-cdn.pp.ua"
-}, {
-  domain: "cfip.1323123.xyz"
-}, {
-  domain: "cnamefuckxxs.yuchen.icu"
-}, {
-  domain: "cloudflare-ip.mofashi.ltd"
-}, {
-  domain: "115155.xyz"
-}, {
-  domain: "cname.xirancdn.us"
-}, {
-  domain: "f3058171cad.002404.xyz"
-}, {
-  domain: "8.889288.xyz"
-}, {
-  domain: "cdn.tzpro.xyz"
-}, {
-  domain: "cf.877771.xyz"
-}, {
-  domain: "xn--b6gac.eu.org"
-}];
-const 错误_无效数据 = atob('aW52YWxpZCBkYXRh');
-const 错误_无效用户 = atob('aW52YWxpZCB1c2Vy');
-const 错误_不支持命令 = atob('Y29tbWFuZCBpcyBub3Qgc3VwcG9ydGVk');
-const 错误_仅支持域名系统用户数据报 = atob('VURQIHByb3h5IG9ubHkgZW5hYmxlIGZvciBETlMgd2hpY2ggaXMgcG9ydCA1Mw==');
-const 错误_无效地址类型 = atob('aW52YWxpZCBhZGRyZXNzVHlwZQ==');
-const 错误_空地址 = atob('YWRkcmVzc1ZhbHVlIGlzIGVtcHR5');
-const 错误_网页套接字未打开 = atob('d2ViU29ja2V0LmVhZHlTdGF0ZSBpcyBub3Qgb3Blbg==');
-const 错误_代理无可用方法 = atob('bm8gYWNjZXB0YWJsZSBtZXRob2Rz');
-const 错误_代理需要认证 = atob('c29ja3Mgc2VydmVyIG5lZWRzIGF1dGg=');
-const 错误_代理认证失败 = atob('ZmFpbCB0byBhdXRoIHNvY2tzIHNlcnZlcg==');
-const 错误_代理连接失败 = atob('ZmFpbCB0byBvcGVuIHNvY2tzIGNvbm5lY3Rpb24=');
-const 错误_代理隧道失败 = atob('ZmFpbCB0byBvcGVuIHByb3h5IHR1bm5lbA==');
-const 错误_代理响应异常 = atob('aW52YWxpZCBwcm94eSByZXNwb25zZQ==');
-const 文本_连接方法 = atob('Q09OTkVDVA==');
-const 文本_协议版本 = atob('IEhUVFAvMS4x');
-const 文本_主机头 = atob('SG9zdDog');
-const 文本_代理认证头 = atob('UHJveHktQXV0aG9yaXphdGlvbjogQmFzaWMg');
-const 文本_代理保持 = atob('UHJveHktQ29ubmVjdGlvbjogS2VlcC1BbGl2ZQ==');
-const 文本_用户代理头 = atob('VXNlci1BZ2VudDogTW96aWxsYS81LjA=');
-const 文本_换行 = atob('DQo=');
-const 文本_响应前缀 = atob('SFRUUC8=');
+const 地区回退域名 = new Map([
+  ["HK", "ProxyIP.HK.CMLiussss.net"],
+  ["US", "ProxyIP.US.CMLiussss.net"],
+  ["SG", "ProxyIP.SG.CMLiussss.net"],
+  ["JP", "ProxyIP.JP.CMLiussss.net"],
+  ["KR", "ProxyIP.KR.CMLiussss.net"],
+  ["DE", "ProxyIP.DE.CMLiussss.net"],
+  ["SE", "ProxyIP.SE.CMLiussss.net"],
+  ["NL", "ProxyIP.NL.CMLiussss.net"],
+  ["FI", "ProxyIP.FI.CMLiussss.net"],
+  ["GB", "ProxyIP.GB.CMLiussss.net"],
+]);
+const 直连域名列表 = [
+  "cloudflare.182682.xyz",
+  "speed.marisalnc.com",
+  "freeyx.cloudflare88.eu.org",
+  "bestcf.top",
+  "cdn.2020111.xyz",
+  "cfip.cfcdn.vip",
+  "cf.0sm.com",
+  "cf.090227.xyz",
+  "cf.zhetengsha.eu.org",
+  "cloudflare.9jy.cc",
+  "cf.zerone-cdn.pp.ua",
+  "cfip.1323123.xyz",
+  "cnamefuckxxs.yuchen.icu",
+  "cloudflare-ip.mofashi.ltd",
+  "115155.xyz",
+  "cname.xirancdn.us",
+  "f3058171cad.002404.xyz",
+  "8.889288.xyz",
+  "cdn.tzpro.xyz",
+  "cf.877771.xyz",
+  "xn--b6gac.eu.org",
+];
+const 错误_无效数据 = "invalid data";
+const 错误_无效用户 = "invalid user";
+const 错误_不支持命令 = "command is not supported";
+const 错误_仅支持域名系统用户数据报 = "UDP proxy only enable for DNS which is port 53";
+const 错误_无效地址类型 = "invalid addressType";
+const 错误_空地址 = "addressValue is empty";
+const 错误_网页套接字未打开 = "webSocket.eadyState is not open";
+const 错误_代理无可用方法 = "no acceptable methods";
+const 错误_代理需要认证 = "socks server needs auth";
+const 错误_代理认证失败 = "fail to auth socks server";
+const 错误_代理连接失败 = "fail to open socks connection";
+const 错误_代理隧道失败 = "fail to open proxy tunnel";
+const 错误_代理响应异常 = "invalid proxy response";
+const 文本_连接方法 = "CONNECT";
+const 文本_协议版本 = " HTTP/1.1";
+const 文本_主机头 = "Host: ";
+const 文本_代理认证头 = "Proxy-Authorization: Basic ";
+const 文本_代理保持 = "Proxy-Connection: Keep-Alive";
+const 文本_用户代理头 = "User-Agent: Mozilla/5.0";
+const 文本_换行 = "\r\n";
+const 文本_响应前缀 = "HTTP/";
 const 代理种类_隧道 = 'pt';
 const 代理种类_安全隧道 = 'pts';
 
@@ -189,64 +108,16 @@ function 规范化节点主机(主机786) {
   return String(主机786 || '').trim().replace(/^\[([^\]]+)\]$/, '$1');
 }
 
-async function 获取值备用地址(工作器地区753 = '', 值地区匹配752 = true) {
-  // 没指定地区（wk 留空=官方直连）时走内置地址，不依赖第三方域名
-  if (!工作器地区753 || 工作器地区753 === 'CF') {
-    return 取官方直连地址();
-  }
-  if (备用地址列表.length === 0) {
-    return 取官方直连地址();
-  }
-  const 可用地址列表751 = 备用地址列表.map(地址750 => ({
-    ...地址750,
-    available: true
-  }));
-  if (值地区匹配752 && 工作器地区753) {
-    const 值地址列表749 = 获取值地区值(工作器地区753, 可用地址列表751, 值地区匹配752);
-    if (值地址列表749.length > 0) {
-      const 已选地址748 = 值地址列表749[0];
-      return 已选地址748;
-    }
-  }
-  const 已选地址 = 可用地址列表751[0];
-  return 已选地址;
-}
-function 获取值值(地区747) {
-  const 值映射 = {
-    'US': ['SG', 'JP', 'KR'],
-    'SG': ['JP', 'KR', 'US'],
-    'JP': ['SG', 'KR', 'US'],
-    'KR': ['JP', 'SG', 'US'],
-    'DE': ['NL', 'GB', 'SE', 'FI'],
-    'SE': ['DE', 'NL', 'FI', 'GB'],
-    'NL': ['DE', 'GB', 'SE', 'FI'],
-    'FI': ['SE', 'DE', 'NL', 'GB'],
-    'GB': ['DE', 'NL', 'SE', 'FI']
-  };
-  return 值映射[地区747] || [];
-}
-function 获取值值值值(地区746) {
-  const 值值745 = 获取值值(地区746);
-  const 值值744 = ['US', 'SG', 'JP', 'KR', 'DE', 'SE', 'NL', 'FI', 'GB'];
-  return [地区746, ...值值745, ...值值744.filter(结果值743 => 结果值743 !== 地区746 && !值值745.includes(结果值743))];
-}
-function 获取值地区值(工作器地区, 可用地址列表, 值地区匹配 = true) {
-  if (!值地区匹配 || !工作器地区) {
-    return 可用地址列表;
-  }
-  const 值值742 = 获取值值值值(工作器地区);
-  const 值地址列表741 = [];
-  for (const 地区 of 值值742) {
-    const 地区地址列表 = 可用地址列表.filter(地址740 => 地址740.regionCode === 地区);
-    值地址列表741.push(...地区地址列表);
-  }
-  return 值地址列表741;
+// 所有调用方都传入已大写的地区。固定地址池没有可用性探测，未知地区沿用 US。
+async function 获取值备用地址(地区 = '', 地区匹配 = true) {
+  if (!地区 || 地区 === 'CF') return 取官方直连地址();
+  return { domain: 地区回退域名.get(地区匹配 ? 地区 : 'HK') || 地区回退域名.get('US'), port: 443 };
 }
 
 export default {
   async fetch(请求735, 本地值734, 本地值733) {
     try {
-      const 是否网页套接字 = 请求735.headers.get('Upgrade') === atob('d2Vic29ja2V0');
+      const 是否网页套接字 = 请求735.headers.get('Upgrade') === "websocket";
       const 是否值732 = 请求735.method === 'POST';
       const 请求网址731 = new URL(请求735.url);
       const 路径值730 = 请求网址731.pathname.split('/').filter(参数值729 => 参数值729);
@@ -266,7 +137,7 @@ export default {
       const store = getConfigStore(本地值734.C || 本地值734.c);
       const stored = store ? await store.load() : {};
       const settings = createSettings(本地值734, stored);
-      const 网址698 = new URL(请求735.url);
+      const 网址698 = 请求网址731;
       const 管理路由 = 解析管理路由(网址698.pathname, settings.自定义路径, settings.认证令牌);
       if (管理路由 === 'config') return await handleConfig(请求735, 本地值734, store, stored);
       if (管理路由 === 'preferred') return await handlePreferred(请求735, 本地值734, store, stored);
@@ -302,7 +173,7 @@ export default {
           status: 500
         });
       }
-      if (请求735.headers.get('Upgrade') === atob('d2Vic29ja2V0')) {
+      if (请求735.headers.get('Upgrade') === "websocket") {
         return await 处理网页套接字请求(请求735, settings);
       }
       if (请求735.method === 'GET') {
@@ -381,8 +252,8 @@ async function 处理订阅请求(settings, 请求507, 用户506, 网址505 = nu
   if (!网址505) 网址505 = new URL(请求507.url);
   const 最终链接列表 = [];
   const 工作器域名504 = 网址505.hostname;
-  const 目标503 = 网址505.searchParams.get('target') || 'base64';
-  const 家宽目标 = ['vg', 'jk', 解码64('amlha3Vhbg==')].includes(目标503.toLowerCase());
+  const 目标503 = (网址505.searchParams.get('target') || 'base64').toLowerCase();
+  const 家宽目标 = ['vg', 'jk', "jiakuan"].includes(目标503);
   if (家宽目标 && !settings.启用家宽链式) {
     return new Response('家宽链式没开。去配置管理勾上「开启家宽链式」，或者加环境变量 jk=yes。', {
       status: 403,
@@ -391,7 +262,7 @@ async function 处理订阅请求(settings, 请求507, 用户506, 网址505 = nu
   }
   const 转换目标 = ['clash', 'clashr', 'stash', 'meta', 'clashmeta',
     'vg', 'jk', 'jiakuan', 'surge', 'surge2', 'surge3', 'surge4',
-    'quantumult', 'quanx', 'loon', 'singbox', 'sing-box'].includes(目标503.toLowerCase());
+    'quantumult', 'quanx', 'loon', 'singbox', 'sing-box'].includes(目标503);
   const 不兼容扩展传输 = 转换目标 && settings.启用扩展传输 && !settings.启用明文;
   if (不兼容扩展传输 && !settings.启用木马) {
     return new Response('当前订阅格式不支持原生 XHTTP，且未启用兼容的 WebSocket 协议。' +
@@ -434,7 +305,7 @@ async function 处理订阅请求(settings, 请求507, 用户506, 网址505 = nu
         if (值备用地址494) {
           const 备用列表493 = [{
             ip: 值备用地址494.domain,
-            isp: 解码64('UHJveHlJUC0=') + settings.当前工作器地区
+            isp: "ProxyIP-" + settings.当前工作器地区
           }];
           添加节点列表来源列表(备用列表493);
         } else {
@@ -462,10 +333,7 @@ async function 处理订阅请求(settings, 请求507, 用户506, 网址505 = nu
     }
   } else {
     if (settings.启用优选域名) {
-      const 域名列表 = 直连域名列表.map(丁值491 => ({
-        ip: 丁值491.domain,
-        isp: 丁值491.name || 丁值491.domain
-      }));
+      const 域名列表 = 直连域名列表.map(ip => ({ ip, isp: ip }));
       添加节点列表来源列表(域名列表);
     }
     if (settings.启用优选地址) {
@@ -480,7 +348,7 @@ async function 处理订阅请求(settings, 请求507, 用户506, 网址505 = nu
           if (值备用地址488) {
             const 备用列表487 = [{
               ip: 值备用地址488.domain,
-              isp: 解码64('UHJveHlJUC0=') + settings.当前工作器地区
+              isp: "ProxyIP-" + settings.当前工作器地区
             }];
             添加节点列表来源列表(备用列表487);
           }
@@ -498,7 +366,7 @@ async function 处理订阅请求(settings, 请求507, 用户506, 网址505 = nu
         if (值备用地址485) {
           const 备用列表 = [{
             ip: 值备用地址485.domain,
-            isp: 解码64('UHJveHlJUC0=') + settings.当前工作器地区
+            isp: "ProxyIP-" + settings.当前工作器地区
           }];
           添加节点列表来源列表(备用列表);
         }
@@ -507,24 +375,24 @@ async function 处理订阅请求(settings, 请求507, 用户506, 网址505 = nu
   }
   if (最终链接列表.length === 0) {
     const 错误备注 = "所有节点获取失败";
-    const 协议484 = atob('dmxlc3M=');
+    const 协议484 = "vless";
     const 错误链接 = `${协议484}://00000000-0000-0000-0000-000000000000@127.0.0.1:80?encryption=none&security=none&type=ws&host=error.com&path=%2F#${encodeURIComponent(错误备注)}`;
     最终链接列表.push(错误链接);
   }
   let 订阅内容;
   let 内容类型483 = 'text/plain; charset=utf-8';
-  switch (目标503.toLowerCase()) {
-    case atob('Y2xhc2g='):
-    case atob('Y2xhc2hy'):
-    case 解码64('c3Rhc2g='):
+  switch (目标503) {
+    case "clash":
+    case "clashr":
+    case "stash":
     case 'meta':
-    case 解码64('Y2xhc2htZXRh'):
+    case "clashmeta":
       订阅内容 = generateClash(最终链接列表, { dns: settings.自定义域名系统, echDomain: settings.自定义加密客户端问候域名 });
       内容类型483 = 'text/yaml; charset=utf-8';
       break;
     case 'vg':
     case 'jk':
-    case 解码64('amlha3Vhbg=='):
+    case "jiakuan":
       try {
         订阅内容 = await generateResidential(最终链接列表, { dns: settings.自定义域名系统, echDomain: settings.自定义加密客户端问候域名 });
       } catch (错误) {
@@ -535,23 +403,23 @@ async function 处理订阅请求(settings, 请求507, 用户506, 网址505 = nu
       }
       内容类型483 = 'text/yaml; charset=utf-8';
       break;
-    case atob('c3VyZ2U='):
-    case atob('c3VyZ2Uy'):
-    case atob('c3VyZ2Uz'):
-    case atob('c3VyZ2U0'):
+    case "surge":
+    case "surge2":
+    case "surge3":
+    case "surge4":
       订阅内容 = generateSurge(最终链接列表, { dns: settings.自定义域名系统 });
       内容类型483 = 'text/plain; charset=utf-8';
       break;
-    case atob('cXVhbnR1bXVsdA=='):
-    case atob('cXVhbng='):
+    case "quantumult":
+    case "quanx":
       订阅内容 = generateQuantumultX(最终链接列表, { dns: settings.自定义域名系统 });
       break;
-    case atob('bG9vbg=='):
+    case "loon":
       订阅内容 = generateLoon(最终链接列表, { dns: settings.自定义域名系统 });
       内容类型483 = 'text/plain; charset=utf-8';
       break;
-    case atob('c2luZ2JveA=='):
-    case 解码64('c2luZy1ib3g='):
+    case "singbox":
+    case "sing-box":
       订阅内容 = generateSingBox(最终链接列表, { dns: settings.自定义域名系统 });
       内容类型483 = 'application/json; charset=utf-8';
       break;
@@ -632,8 +500,7 @@ async function 获取值地址列表(settings) {
 }
 
 async function 处理网页套接字请求(请求417, 配置快照) {
-  const { 认证令牌, 启用明文, 启用木马, 传输路径, 当前工作器地区, 手动工作器地区 } = 配置快照;
-  // 从请求URL的path query中读取客户端自定义参数
+  const { 认证令牌, 启用明文, 启用木马, 传输路径, 当前工作器地区 } = 配置快照;
   // 从 path query 读取覆盖参数
   const 请求网址 = new URL(请求417.url);
   const 请求回退416 = 请求网址.searchParams.get('p') || '';
@@ -648,20 +515,7 @@ async function 处理网页套接字请求(请求417, 配置快照) {
     } catch (忽略值412) {}
   }
 
-  // 检测并设置当前Worker地区，确保WebSocket请求能正确进行就近匹配
-  // 优先级：客户端path参数wk > 全局manualWorkerRegion > 自动检测
-  let 实际地区411 = 当前工作器地区;
-  if (!实际地区411 || 实际地区411 === '') {
-    if (请求地区415) {
-      实际地区411 = 请求地区415;
-    } else if (手动工作器地区 && 手动工作器地区.trim()) {
-      实际地区411 = 手动工作器地区.trim().toUpperCase();
-    } else {
-      实际地区411 = 'CF';
-    }
-  } else if (请求地区415) {
-    实际地区411 = 请求地区415;
-  }
+  const 实际地区411 = 请求地区415 || 当前工作器地区;
   const 网页套接字值 = new WebSocketPair();
   const [客户端值, 值值410] = Object.values(网页套接字值);
   值值410.accept();
@@ -723,7 +577,7 @@ async function 处理网页套接字请求(请求417, 配置快照) {
   远程连接值409.drainUpload = () => {
     if (!值值408 && !值队列.empty && 远程连接值409.writer) queueMicrotask(处理值值402);
   };
-  const 值数据399 = 请求417.headers.get(atob('c2VjLXdlYnNvY2tldC1wcm90b2NvbA==')) || '';
+  const 值数据399 = 请求417.headers.get("sec-websocket-protocol") || '';
   const 本地值398 = 制作值流(值值410, 值数据399);
   本地值398.pipeTo(new WritableStream({
     close() { 关闭传输(); },
@@ -744,7 +598,7 @@ async function 处理网页套接字请求(请求417, 配置快照) {
         if (启用明文 && 数据396.byteLength >= 24) {
           const 轻量协议结果 = 解析网页套接字值头部(数据396, 认证令牌);
           if (!轻量协议结果.hasError) {
-            协议类型 = 解码64('dmxlc3M=');
+            协议类型 = "vless";
             const {
               port: 端口394,
               hostname: 主机名393,
@@ -765,7 +619,7 @@ async function 处理网页套接字请求(请求417, 配置快照) {
         if (启用木马 && 数据396.byteLength >= 56) {
           const 值结果 = await 解析木马头部(数据396, 认证令牌, 传输路径);
           if (!值结果.hasError) {
-            协议类型 = atob('dHJvamFu');
+            协议类型 = "trojan";
             const {
               port: 端口387,
               hostname: 主机名386,
@@ -1515,28 +1369,28 @@ async function 解析木马头部(缓冲234, 本地值233, 传输路径 = '') {
   if (字节.byteLength < 56) {
     return {
       hasError: true,
-      message: "invalid " + atob('dHJvamFu') + " data - too short"
+      message: "invalid " + "trojan" + " data - too short"
     };
   }
   let 值值索引 = 56;
   if (字节[56] !== 0x0d || 字节[57] !== 0x0a) {
     return {
       hasError: true,
-      message: "invalid " + atob('dHJvamFu') + " header format (missing CR LF)"
+      message: "invalid " + "trojan" + " header format (missing CR LF)"
     };
   }
   const 密码232 = 共享解码器.decode(字节.subarray(0, 值值索引));
   if (密码232 !== 值224密码) {
     return {
       hasError: true,
-      message: "invalid " + atob('dHJvamFu') + " password"
+      message: "invalid " + "trojan" + " password"
     };
   }
   const 代理5数据缓冲 = 字节.subarray(值值索引 + 2);
   if (代理5数据缓冲.byteLength < 6) {
     return {
       hasError: true,
-      message: atob('aW52YWxpZCBTT0NLUzUgcmVxdWVzdCBkYXRh')
+      message: "invalid SOCKS5 request data"
     };
   }
   const 视图231 = new DataView(代理5数据缓冲.buffer, 代理5数据缓冲.byteOffset, 代理5数据缓冲.byteLength);
