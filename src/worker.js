@@ -1,5 +1,5 @@
-// CFnew - 终端 v4.0.0
-// 版本: v4.0.0
+// CFnew - 终端 v4.0.1
+// 版本: v4.0.1
 import { connect as 连接 } from 'cloudflare:sockets';
 import { decodeBase64Text as 解码64 } from './encoding.js';
 
