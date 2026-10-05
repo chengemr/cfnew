@@ -114,6 +114,15 @@ async function 获取值备用地址(地区 = '', 地区匹配 = true) {
   return { domain: 地区回退域名.get(地区匹配 ? 地区 : 'HK') || 地区回退域名.get('US'), port: 443 };
 }
 
+async function 获取回退目标(回退地址, 地区, 地区匹配, 端口) {
+  if (回退地址 && 回退地址.trim()) {
+    const 已解析 = 解析地址值端口(回退地址);
+    return { address: 已解析.address, port: 已解析.port || 端口 };
+  }
+  const 备用 = await 获取值备用地址(地区, 地区匹配);
+  return { address: 备用.domain, port: 备用.port };
+}
+
 export default {
   async fetch(请求735, 本地值734, 本地值733) {
     try {
@@ -164,7 +173,7 @@ export default {
             const 响应填充 = new URL('https://x.invalid/');
             响应填充.searchParams.set(叉填充键, 生成叉HTTP填充串(100 + Math.floor(Math.random() * 901)));
             响应头684[叉填充头] = 响应填充.toString();
-          } catch (忽略684) {}
+          } catch {}
           return new Response(结果值684.readable, {
             headers: 响应头684
           });
@@ -300,7 +309,7 @@ async function 处理订阅请求(settings, 请求507, 用户506, 网址505 = nu
           isp: '原生地址'
         }];
         添加节点列表来源列表(原生列表496);
-      } catch (错误495) {
+      } catch {
         const 值备用地址494 = await 获取值备用地址(settings.当前工作器地区, settings.启用地区匹配);
         if (值备用地址494) {
           const 备用列表493 = [{
@@ -343,7 +352,7 @@ async function 处理订阅请求(settings, 请求507, 用户506, 网址505 = nu
           if (值地址列表490.length > 0) {
             添加节点列表来源列表(值地址列表490);
           }
-        } catch (错误489) {
+        } catch {
           const 值备用地址488 = await 获取值备用地址(settings.当前工作器地区, settings.启用地区匹配);
           if (值备用地址488) {
             const 备用列表487 = [{
@@ -361,7 +370,7 @@ async function 处理订阅请求(settings, 请求507, 用户506, 网址505 = nu
         if (新地址列表.length > 0) {
           最终链接列表.push(...generateNodeLinks(节点设置, 新地址列表, 用户506, 工作器域名504, 别名命名器502, true));
         }
-      } catch (错误486) {
+      } catch {
         const 值备用地址485 = await 获取值备用地址(settings.当前工作器地区, settings.启用地区匹配);
         if (值备用地址485) {
           const 备用列表 = [{
@@ -495,7 +504,7 @@ async function 获取值地址列表(settings) {
       }
     }
     return 结果列表433;
-  } catch (事件值427) {}
+  } catch {}
   return [];
 }
 
@@ -512,7 +521,7 @@ async function 处理网页套接字请求(请求417, 配置快照) {
   if (请求代理字符串) {
     try {
       请求代理配置413 = 解析代理配置(请求代理字符串);
-    } catch (忽略值412) {}
+    } catch {}
   }
 
   const 实际地区411 = 请求地区415 || 当前工作器地区;
@@ -534,7 +543,7 @@ async function 处理网页套接字请求(请求417, 配置快照) {
   function 处理值远程写入器() {
     try {
       远程连接值409.writer?.releaseLock();
-    } catch (忽略值406) {}
+    } catch {}
     远程连接值409.writer = null;
   }
   function 关闭传输() {
@@ -544,7 +553,7 @@ async function 处理网页套接字请求(请求417, 配置快照) {
     处理值远程写入器();
     try {
       远程连接值409.socket?.close();
-    } catch (忽略值405) {}
+    } catch {}
     关闭套接字值(值值410);
   }
   function 处理队列值(块404) {
@@ -563,11 +572,11 @@ async function 处理网页套接字请求(请求417, 配置快照) {
     try {
       for (;;) {
         if (传输值 || !远程连接值409.writer) break;
-        const [数据401] = 值队列.bundle();
+        const 数据401 = 值队列.bundle();
         if (!数据401) break;
         await 远程连接值409.writer.write(数据401);
       }
-    } catch (忽略值400) {
+    } catch {
       关闭传输();
     } finally {
       值值408 = false;
@@ -612,7 +621,7 @@ async function 处理网页套接字请求(请求417, 配置快照) {
             const 值头部390 = new Uint8Array([本地值392[0], 0]);
             const 原始数据389 = 数据396.subarray(原始索引);
             if (是否域名系统值) return 处理值用户数据报(原始数据389, 值值410, 值头部390, 请求值407);
-            await 处理值值384(主机名393, 端口394, 原始数据389, 值值410, 值头部390, 远程连接值409, 请求回退416, 实际地区411, 请求值414, 请求代理配置413, 请求值407, 配置快照);
+            await 连接网页套接字TCP(主机名393, 端口394, 原始数据389, 值值410, 值头部390, 远程连接值409, 请求回退416, 实际地区411, 请求值414, 请求代理配置413, 请求值407, 配置快照);
             return;
           }
         }
@@ -625,22 +634,20 @@ async function 处理网页套接字请求(请求417, 配置快照) {
               hostname: 主机名386,
               rawClientData: 原始客户端数据
             } = 值结果;
-            await 处理值值384(主机名386, 端口387, 原始客户端数据, 值值410, null, 远程连接值409, 请求回退416, 实际地区411, 请求值414, 请求代理配置413, 请求值407, 配置快照);
+            await 连接网页套接字TCP(主机名386, 端口387, 原始客户端数据, 值值410, null, 远程连接值409, 请求回退416, 实际地区411, 请求值414, 请求代理配置413, 请求值407, 配置快照);
             return;
           }
         }
         throw new Error('Invalid protocol or authentication failed');
       }
     }
-  })).catch(错误385 => {
-    关闭传输();
-  });
+  })).catch(关闭传输);
   return new Response(null, {
     status: 101,
     webSocket: 客户端值
   });
 }
-async function 处理值值384(主机, 端口数字, 原始数据, 网页套接字382, 值头部381, 远程连接值, 请求回退 = '', 请求地区 = '', 请求值380 = null, 请求代理配置 = null, 请求值379 = null, 配置快照) {
+async function 连接网页套接字TCP(主机, 端口数字, 原始数据, 网页套接字382, 值头部381, 远程连接值, 请求回退 = '', 请求地区 = '', 请求值380 = null, 请求代理配置 = null, 请求值379 = null, 配置快照) {
   const { 回退地址, 当前工作器地区, 启用地区匹配, 已解析代理5配置, 是否代理已启用, 仅走代理, 启用代理降级 } = 配置快照;
   // 优先使用客户端path参数，其次回退到全局配置
   const 实际回退 = 请求回退 || 回退地址;
@@ -667,7 +674,7 @@ async function 处理值值384(主机, 端口数字, 原始数据, 网页套接�
     if (远程连接值.socket !== 远程值373) return;
     try {
       写入器372?.releaseLock();
-    } catch (忽略值371) {}
+    } catch {}
     远程连接值.socket = null;
     远程连接值.writer = null;
   }
@@ -676,77 +683,44 @@ async function 处理值值384(主机, 端口数字, 原始数据, 网页套接�
       if (远程连接值.writer && 远程连接值.writer !== 写入器369) {
         远程连接值.writer.releaseLock();
       }
-    } catch (忽略值367) {}
+    } catch {}
     远程连接值.socket = 远程值370;
     远程连接值.writer = 写入器369;
     远程连接值.drainUpload?.();
     远程值370.closed.catch(() => {}).finally(() => {
       if (远程连接值.socket === 远程值370) 关闭套接字值(网页套接字382);
     });
-    连接值279(远程值370, 网页套接字382, 值头部381, 重试值368).finally(() => {
+    转发远程数据到WS(远程值370, 网页套接字382, 值头部381, 重试值368).finally(() => {
       if (远程连接值.socket === 远程值370) {
         try {
           写入器369.releaseLock();
-        } catch (忽略值366) {}
+        } catch {}
         远程连接值.writer = null;
       }
     });
   }
   async function 处理重试连接() {
-    // 只走代理：不回落到直连或备用地址，避免出口 IP 泄漏
+    // 只走代理：不回落到直连或备用地址，避免出口 IP 泄漏。
     if (仅走代理 && 实际代理已启用) {
       关闭套接字值(网页套接字382);
       return;
     }
+    let 回退走代理 = 实际代理已启用;
     if (启用代理降级 && 实际代理已启用) {
       try {
-        const {
-          remoteSock: 代理套接字,
-          writer: 代理写入器
-        } = await 连接值发送(主机, 端口数字, true);
-        处理值远程(代理套接字, 代理写入器, null);
+        const { remoteSock, writer } = await 连接值发送(主机, 端口数字, true);
+        处理值远程(remoteSock, writer, null);
         return;
-      } catch (代理错误) {
-        let 备用主机365, 备用端口364;
-        if (实际回退 && 实际回退.trim()) {
-          const 已解析363 = 解析地址值端口(实际回退);
-          备用主机365 = 已解析363.address;
-          备用端口364 = 已解析363.port || 端口数字;
-        } else {
-          const 值备用地址362 = await 获取值备用地址(实际地区, 实际地区匹配);
-          备用主机365 = 值备用地址362 ? 值备用地址362.domain : 主机;
-          备用端口364 = 值备用地址362 ? 值备用地址362.port : 端口数字;
-        }
-        try {
-          const {
-            remoteSock: 回退套接字361,
-            writer: 回退写入器360
-          } = await 连接值发送(备用主机365, 备用端口364, false);
-          处理值远程(回退套接字361, 回退写入器360, null);
-        } catch (回退错误359) {
-          关闭套接字值(网页套接字382);
-        }
+      } catch {
+        回退走代理 = false;
       }
-    } else {
-      let 备用主机, 备用端口;
-      if (实际回退 && 实际回退.trim()) {
-        const 已解析 = 解析地址值端口(实际回退);
-        备用主机 = 已解析.address;
-        备用端口 = 已解析.port || 端口数字;
-      } else {
-        const 值备用地址 = await 获取值备用地址(实际地区, 实际地区匹配);
-        备用主机 = 值备用地址 ? 值备用地址.domain : 主机;
-        备用端口 = 值备用地址 ? 值备用地址.port : 端口数字;
-      }
-      try {
-        const {
-          remoteSock: 回退套接字,
-          writer: 回退写入器
-        } = await 连接值发送(备用主机, 备用端口, 实际代理已启用);
-        处理值远程(回退套接字, 回退写入器, null);
-      } catch (回退错误) {
-        关闭套接字值(网页套接字382);
-      }
+    }
+    const 回退 = await 获取回退目标(实际回退, 实际地区, 实际地区匹配, 端口数字);
+    try {
+      const { remoteSock, writer } = await 连接值发送(回退.address, 回退.port, 回退走代理);
+      处理值远程(remoteSock, writer, null);
+    } catch {
+      关闭套接字值(网页套接字382);
     }
   }
   try {
@@ -760,7 +734,7 @@ async function 处理值值384(主机, 端口数字, 原始数据, 网页套接�
       处理值值当前(值套接字358, 值写入器);
       处理重试连接();
     });
-  } catch (错误357) {
+  } catch {
     await 处理重试连接();
   }
 }
@@ -814,9 +788,9 @@ function 创建块队列(本地值350, 值值349 = 本地值350, 项目列表上
       值字节347 += 数量值;
       return true;
     },
-    bundle(数据341 = null) {
-      数据341 ||= 处理本地值344();
-      if (!数据341 || 头部348 >= 队列.length || 数据341.byteLength >= 本地值350) return [数据341, false];
+    bundle() {
+      const 数据341 = 处理本地值344();
+      if (!数据341 || 头部348 >= 队列.length || 数据341.byteLength >= 本地值350) return 数据341;
       let 本地值340 = 数据341.byteLength;
       let 结束 = 头部348;
       while (结束 < 队列.length) {
@@ -826,7 +800,7 @@ function 创建块队列(本地值350, 值值349 = 本地值350, 项目列表上
         本地值340 = 值值338;
         结束++;
       }
-      if (结束 === 头部348) return [数据341, false];
+      if (结束 === 头部348) return 数据341;
       const 输出 = 值缓冲346 ||= new Uint8Array(本地值350);
       输出.set(数据341);
       let 偏移337 = 数据341.byteLength;
@@ -838,11 +812,11 @@ function 创建块队列(本地值350, 值值349 = 本地值350, 项目列表上
         偏移337 += 本地值336.byteLength;
       }
       处理本地值345();
-      return [输出.subarray(0, 本地值340), true];
+      return 输出.subarray(0, 本地值340);
     }
   };
 }
-function 创建值值(网页套接字335) {
+function 创建WS下行聚合器(网页套接字335) {
   const 本地值334 = 传输下载包大小;
   const 尾部 = 传输下载尾部;
   const 值值333 = Math.max(4096, 尾部 << 3);
@@ -943,7 +917,7 @@ async function 连接值套接字(地址313, 端口312, 请求值311 = null, 竞
       if (套接字307 !== 本地值309) {
         try {
           套接字307.close();
-        } catch (忽略值306) {}
+        } catch {}
       }
     }, () => {});
   });
@@ -1078,7 +1052,7 @@ function 制作值流(套接字284, 值数据头部) {
     }
   });
 }
-async function 连接值279(远程套接字, 网页套接字278, 头部数据, 重试值) {
+async function 转发远程数据到WS(远程套接字, 网页套接字278, 头部数据, 重试值) {
   let 头部277 = 头部数据,
     是否有数据 = false,
     本地值276 = false;
@@ -1091,12 +1065,12 @@ async function 连接值279(远程套接字, 网页套接字278, 头部数据, �
         本地值276 = true;
         try {
           远程套接字.close && 远程套接字.close();
-        } catch (忽略值275) {}
+        } catch {}
         重试值();
       }
     }, 首字节超时);
   }
-  const 本地值274 = 创建值值(网页套接字278);
+  const 本地值274 = 创建WS下行聚合器(网页套接字278);
   let 读取器273 = null;
   let 本地值272 = true;
   let 缓冲271 = new ArrayBuffer(传输块大小);
@@ -1105,7 +1079,7 @@ async function 连接值279(远程套接字, 网页套接字278, 头部数据, �
       读取器273 = 远程套接字.readable.getReader({
         mode: 'byob'
       });
-    } catch (忽略值270) {
+    } catch {
       本地值272 = false;
       读取器273 = 远程套接字.readable.getReader();
     }
@@ -1138,16 +1112,16 @@ async function 连接值279(远程套接字, 网页套接字278, 头部数据, �
       }
     }
     本地值274.flush();
-  } catch (错误267) {
+  } catch {
     // 已经触发 retry 时不要关闭 WS（retry 会重新挂载新 socket）
     if (!本地值276) 关闭套接字值(网页套接字278);
   } finally {
     try {
       本地值274.flush();
-    } catch (忽略值266) {}
+    } catch {}
     try {
       读取器273?.releaseLock();
-    } catch (忽略值265) {}
+    } catch {}
   }
   if (首次字节计时器) {
     clearTimeout(首次字节计时器);
@@ -1162,8 +1136,8 @@ async function 处理值用户数据报(用户数据报块, 网页套接字, 值
     const 写入器264 = 值套接字.writable.getWriter();
     await 写入器264.write(用户数据报块);
     写入器264.releaseLock();
-    await 连接值279(值套接字, 网页套接字, 头部, null);
-  } catch (错误263) {}
+    await 转发远程数据到WS(值套接字, 网页套接字, 头部, null);
+  } catch {}
 }
 async function 处理值代理连接(地址262, 端口261, 代理配置, 请求值258 = null, 首包数据 = null) {
   // 按代理种类分派：隧道走建隧请求，其余保持套接字5 握手
@@ -1212,8 +1186,7 @@ async function 处理值代理连接(地址262, 端口261, 代理配置, 请求�
       if (本地值253[0] !== 1 || 本地值253[1] !== 0) throw new Error(错误_代理认证失败);
       取走(2);
     }
-    // 统一用域名型寻址：调用方的地址类型编号在不同协议下含义不一致（值协议 2=域名，
-    // 木马协议 3=域名），按编号分支会把域名当成六版地址编错。交给代理自己解析更稳。
+    // 统一用域名型寻址，避免 VLESS / Trojan 不同的地址类型编号影响 SOCKS 握手。
     const 编码器251 = new TextEncoder();
     const 目标字节 = 编码器251.encode(规范化目标地址(地址262));
     const 本地值250 = new Uint8Array([3, 目标字节.length, ...目标字节]);
@@ -1318,13 +1291,13 @@ async function 处理值隧道连接(地址238值, 端口237值, 代理配置, �
   } catch (隧道错误) {
     try {
       写入器.releaseLock();
-    } catch (忽略隧道1) {}
+    } catch {}
     try {
       读取器.releaseLock();
-    } catch (忽略隧道2) {}
+    } catch {}
     try {
       套接字.close();
-    } catch (忽略隧道3) {}
+    } catch {}
     throw 隧道错误;
   }
 }
@@ -1350,7 +1323,7 @@ function 包装残留套接字(套接字, 残留数据) {
     cancel(原因) {
       try {
         上游读取器?.cancel(原因);
-      } catch (忽略取消) {}
+      } catch {}
     }
   });
   return {
@@ -1518,20 +1491,6 @@ function 验证唯一标识扩展超文本(标识192, 唯一标识191) {
   return true;
 }
 
-function 处理值值值(首次, ...本地值188) {
-  let 长度 = 首次.length;
-  for (let 甲值187 of 本地值188) {
-    长度 += 甲值187.length;
-  }
-  const 结果值186 = new 首次.constructor(长度);
-  结果值186.set(首次, 0);
-  长度 = 首次.length;
-  for (let 甲值185 of 本地值188) {
-    结果值186.set(甲值185, 长度);
-    长度 += 甲值185.length;
-  }
-  return 结果值186;
-}
 function 解析唯一标识扩展超文本(唯一标识184) {
   唯一标识184 = 唯一标识184.replaceAll('-', '');
   const 结果值183 = [];
@@ -1580,7 +1539,7 @@ async function 读取扩展超文本头部(本地值180, 唯一标识字符串) 
         throw new Error('header too short');
       }
       本地值177 += 结果值178.value.length;
-      缓存 = 处理值值值(缓存, 结果值178.value);
+      缓存 = 拼接值8数组(缓存, 结果值178.value);
     }
     const 命令 = 缓存[1 + 16 + 1 + 值长度173];
     if (命令 !== 1) {
@@ -1609,7 +1568,7 @@ async function 读取扩展超文本头部(本地值180, 唯一标识字符串) 
         throw new Error('read address failed');
       }
       本地值177 += 结果值178.value.length;
-      缓存 = 处理值值值(缓存, 结果值178.value);
+      缓存 = 拼接值8数组(缓存, 结果值178.value);
     }
     let 主机名170 = '';
     索引 = 地址值1;
@@ -1640,7 +1599,7 @@ async function 读取扩展超文本头部(本地值180, 唯一标识字符串) 
     try { await 读取器179.cancel(); } catch {}
     try {
       读取器179.releaseLock();
-    } catch (忽略值167) {}
+    } catch {}
     if (已超时) throw new DOMException('XHTTP header timeout', 'TimeoutError');
     throw 错误168;
   } finally {
@@ -1648,56 +1607,33 @@ async function 读取扩展超文本头部(本地值180, 唯一标识字符串) 
   }
 }
 
-// 出站决策与 ws 的 处理值值384 对齐：接入 s（代理）、wk/rm（地区匹配备用地址）、qj（代理降级/仅走代理）
+// XHTTP 沿用 WS 的出站策略；其回退由建连失败触发，WS 另有首字节超时重试。
 async function 连接值远程扩展超文本(首包, 请求值扩展 = null, 配置快照) {
   const { 回退地址, 当前工作器地区, 启用地区匹配, 已解析代理5配置, 是否代理已启用, 仅走代理, 启用代理降级 } = 配置快照;
   if (仅走代理 && !是否代理已启用) return null;
-  const 主机 = 首包.hostname;
-  const 端口 = 首包.port;
-  const 直连 = async (地址, 端口值) => 连接值套接字(地址, 端口值, 请求值扩展, 传输连接竞速数);
-  const 走代理 = async (地址, 端口值) => 处理值代理连接(地址, 端口值, 已解析代理5配置, 请求值扩展, null);
-  // 计算回退目标：优先 p（回退地址），否则按 wk/rm 取地区匹配备用地址
-  const 取回退目标 = async () => {
-    if (回退地址 && 回退地址.trim()) {
-      const 已解析 = 解析地址值端口(回退地址);
-      return {
-        address: 已解析.address,
-        port: 已解析.port || 端口
-      };
-    }
-    const 备用 = await 获取值备用地址(当前工作器地区, 启用地区匹配);
-    return 备用 ? {
-      address: 备用.domain,
-      port: 备用.port
-    } : {
-      address: 主机,
-      port: 端口
-    };
-  };
-  const 首跳走代理 = 仅走代理 && 是否代理已启用 ? true : 启用代理降级 ? false : 是否代理已启用;
+  const { hostname: 主机, port: 端口 } = 首包;
+  const 建连 = async (地址, 端口值, 走代理) => 走代理
+    ? 处理值代理连接(地址, 端口值, 已解析代理5配置, 请求值扩展, null)
+    : 连接值套接字(地址, 端口值, 请求值扩展, 传输连接竞速数);
+  const 首跳走代理 = 是否代理已启用 && (仅走代理 || !启用代理降级);
   try {
-    const 套接字 = 首跳走代理 ? await 走代理(主机, 端口) : await 直连(主机, 端口);
-    return createXHTTPRelay(首包, 套接字);
-  } catch (首跳错误) {
-    // 只走代理：首跳失败不回落直连，避免出口 IP 泄漏
+    return createXHTTPRelay(首包, await 建连(主机, 端口, 首跳走代理));
+  } catch {
     if (仅走代理 && 是否代理已启用) return null;
+  }
+  let 回退走代理 = 是否代理已启用;
+  if (启用代理降级 && 是否代理已启用) {
     try {
-      if (启用代理降级 && 是否代理已启用) {
-        try {
-          const 代理套接字 = await 走代理(主机, 端口);
-          return createXHTTPRelay(首包, 代理套接字);
-        } catch (代理错误) {
-          const 回退 = await 取回退目标();
-          const 回退套接字 = await 直连(回退.address, 回退.port);
-          return createXHTTPRelay(首包, 回退套接字);
-        }
-      }
-      const 回退 = await 取回退目标();
-      const 回退套接字 = 是否代理已启用 ? await 走代理(回退.address, 回退.port) : await 直连(回退.address, 回退.port);
-      return createXHTTPRelay(首包, 回退套接字);
-    } catch (回退错误) {
-      return null;
+      return createXHTTPRelay(首包, await 建连(主机, 端口, true));
+    } catch {
+      回退走代理 = false;
     }
+  }
+  try {
+    const 回退 = await 获取回退目标(回退地址, 当前工作器地区, 启用地区匹配, 端口);
+    return createXHTTPRelay(首包, await 建连(回退.address, 回退.port, 回退走代理));
+  } catch {
+    return null;
   }
 }
 async function 处理扩展超文本客户端(主体128, 唯一标识, 请求值扩展 = null, 配置快照) {
@@ -1745,7 +1681,7 @@ async function 处理扩展超文本值(请求119, 配置快照) {
 
   try {
     return await 处理扩展超文本客户端(请求119.body, 配置快照.认证令牌, 请求119.fetcher, 配置快照);
-  } catch (错误118) {
+  } catch {
     return null;
   }
 }
@@ -1768,7 +1704,7 @@ function 处理基础64值数组(值64字符串) {
 function 关闭套接字值(套接字) {
   try {
     if (套接字.readyState === 1 || 套接字.readyState === 2) 套接字.close();
-  } catch (错误115) {}
+  } catch {}
 }
 
 async function 获取值解析新地址列表(settings) {
@@ -1813,7 +1749,7 @@ async function 获取优选接口(网址列表, 默认端口 = '443', 超时 = 3
             } else if (已解码 && 已解码.length > 0) {
               continue;
             }
-          } catch (事件值16) {
+          } catch {
             continue;
           }
         }
@@ -1823,7 +1759,7 @@ async function 获取优选接口(网址列表, 默认端口 = '443', 超时 = 3
         if (!文本 || 文本.trim().length === 0) {
           return;
         }
-      } catch (事件值15) {
+      } catch {
         return;
       }
       const 行列表 = 文本.trim().split('\n').map(行值14 => 行值14.trim()).filter(行值 => 行值);
@@ -1864,7 +1800,7 @@ async function 获取优选接口(网址列表, 默认端口 = '443', 超时 = 3
           });
         }
       }
-    } catch (事件值) {}
+    } catch {}
     finally { clearTimeout(超时标识); }
   }));
   return Array.from(结果列表);
