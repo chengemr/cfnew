@@ -10,7 +10,7 @@ import { handleConfig, handlePreferred } from './api.js';
 import { parseAddress as 解析地址值端口 } from './preferred.js';
 import { parseProxy as 解析代理配置 } from './transports/proxy.js';
 import { createXHTTPRelay } from './transports/streams.js';
-import { withConnectionDeadline } from './transports/connect.js';
+import { withConnectionDeadline, outboundAttempts } from './transports/connect.js';
 import { getPaddingKeys as 获取叉HTTP填充标识, validatePadding as 校验叉HTTP填充, generatePadding as 生成叉HTTP填充串 } from './transports/padding.js';
 import { generateSingBox } from './subscriptions/singbox.js';
 import { generateSurge, generateLoon, generateQuantumultX } from './subscriptions/ini.js';
@@ -462,7 +462,7 @@ async function 获取值地址列表(settings) {
 }
 
 async function 处理网页套接字请求(请求417, 配置快照) {
-  const { 认证令牌, 启用明文, 启用木马, 传输路径, 当前工作器地区 } = 配置快照;
+  const { 认证令牌, 启用明文, 启用木马, 传输路径 } = 配置快照;
   // 从 path query 读取覆盖参数
   const 请求网址 = new URL(请求417.url);
   const 请求回退416 = 请求网址.searchParams.get('p') || '';
@@ -477,7 +477,6 @@ async function 处理网页套接字请求(请求417, 配置快照) {
     } catch {}
   }
 
-  const 实际地区411 = 请求地区415 || 当前工作器地区;
   const 网页套接字值 = new WebSocketPair();
   const [客户端值, 值值410] = Object.values(网页套接字值);
   值值410.accept();
@@ -496,7 +495,10 @@ async function 处理网页套接字请求(请求417, 配置快照) {
   const 连接取消 = new AbortController();
   const 出站配置 = { ...配置快照,
     已解析代理5配置: 请求代理配置413 || 配置快照.已解析代理5配置,
-    是否代理已启用: !!请求代理配置413 || 配置快照.是否代理已启用 };
+    是否代理已启用: !!请求代理配置413 || 配置快照.是否代理已启用,
+    回退地址: 请求回退416 || 配置快照.回退地址,
+    当前工作器地区: 请求地区415 || 配置快照.当前工作器地区,
+    启用地区匹配: 请求值414 ?? 配置快照.启用地区匹配 };
   function 处理值远程写入器() {
     try {
       远程连接值409.writer?.releaseLock();
@@ -578,7 +580,7 @@ async function 处理网页套接字请求(请求417, 配置快照) {
           const 值头部390 = new Uint8Array([本地值392[0], 0]);
           const 原始数据389 = 数据396.subarray(原始索引);
           if (是否域名系统值) return 处理值用户数据报(原始数据389, 值值410, 值头部390, 请求值407, 出站配置, 连接取消.signal);
-          await 连接网页套接字TCP(主机名393, 端口394, 原始数据389, 值值410, 值头部390, 远程连接值409, 请求回退416, 实际地区411, 请求值414, 请求代理配置413, 请求值407, 配置快照, 连接取消.signal);
+          await 连接网页套接字TCP(主机名393, 端口394, 原始数据389, 值值410, 值头部390, 远程连接值409, 请求值407, 出站配置, 连接取消.signal);
           return;
         }
       }
@@ -591,7 +593,7 @@ async function 处理网页套接字请求(请求417, 配置快照) {
             hostname: 主机名386,
             rawClientData: 原始客户端数据
           } = 值结果;
-          await 连接网页套接字TCP(主机名386, 端口387, 原始客户端数据, 值值410, null, 远程连接值409, 请求回退416, 实际地区411, 请求值414, 请求代理配置413, 请求值407, 配置快照, 连接取消.signal);
+          await 连接网页套接字TCP(主机名386, 端口387, 原始客户端数据, 值值410, null, 远程连接值409, 请求值407, 出站配置, 连接取消.signal);
           return;
         }
       }
@@ -603,22 +605,13 @@ async function 处理网页套接字请求(请求417, 配置快照) {
     webSocket: 客户端值
   });
 }
-async function 连接网页套接字TCP(主机, 端口数字, 原始数据, 网页套接字382, 值头部381, 远程连接值, 请求回退 = '', 请求地区 = '', 请求值380 = null, 请求代理配置 = null, 请求值379 = null, 配置快照, signal) {
-  const { 回退地址, 当前工作器地区, 启用地区匹配, 已解析代理5配置, 是否代理已启用, 仅走代理, 启用代理降级 } = 配置快照;
-  // 优先使用客户端path参数，其次回退到全局配置
-  const 实际回退 = 请求回退 || 回退地址;
-  const 实际地区 = 请求地区 || 当前工作器地区;
-  const 实际地区匹配 = 请求值380 !== null ? 请求值380 : 启用地区匹配;
-  const 实际代理配置 = 请求代理配置 || 已解析代理5配置;
-  const 实际代理已启用 = 请求代理配置 ? true : 是否代理已启用;
-  if (仅走代理 && !实际代理已启用) {
-    关闭套接字值(网页套接字382);
-    return;
-  }
+async function 连接网页套接字TCP(主机, 端口数字, 原始数据, 网页套接字382, 值头部381, 远程连接值, 请求值379, 配置快照, signal) {
+  const attempts = outboundAttempts(配置快照, 主机, 端口数字, () => 获取回退目标(
+    配置快照.回退地址, 配置快照.当前工作器地区, 配置快照.启用地区匹配, 端口数字));
   const 值数据378 = 处理值值8数组(原始数据);
   async function 连接值发送(地址377, 端口376, 值代理 = false) {
     // 走代理时首包交给握手函数在释放写入器前发出，避免换写入器导致连接被重置
-    const 远程值375 = await 建立出站连接(地址377, 端口376, 值数据378, 请求值379, 实际代理配置, 值代理, signal);
+    const 远程值375 = await 建立出站连接(地址377, 端口376, 值数据378, 请求值379, 配置快照.已解析代理5配置, 值代理, signal);
     const 写入器374 = 远程值375.writable.getWriter();
     return {
       remoteSock: 远程值375,
@@ -654,45 +647,21 @@ async function 连接网页套接字TCP(主机, 端口数字, 原始数据, 网�
       }
     });
   }
-  async function 处理重试连接() {
-    if (signal.aborted) return;
-    // 只走代理：不回落到直连或备用地址，避免出口 IP 泄漏。
-    if (仅走代理 && 实际代理已启用) {
-      关闭套接字值(网页套接字382);
-      return;
-    }
-    let 回退走代理 = 实际代理已启用;
-    if (启用代理降级 && 实际代理已启用) {
+  async function connectNext() {
+    while (!signal.aborted) {
+      const { value: attempt, done } = await attempts.next();
+      if (done) { 关闭套接字值(网页套接字382); return; }
       try {
-        const { remoteSock, writer } = await 连接值发送(主机, 端口数字, true);
-        处理值远程(remoteSock, writer, null);
+        const { remoteSock, writer } = await 连接值发送(attempt.address, attempt.port, attempt.viaProxy);
+        处理值远程(remoteSock, writer, attempt.first ? () => {
+          处理值值当前(remoteSock, writer);
+          connectNext();
+        } : null);
         return;
-      } catch {
-        回退走代理 = false;
-      }
-    }
-    const 回退 = await 获取回退目标(实际回退, 实际地区, 实际地区匹配, 端口数字);
-    try {
-      const { remoteSock, writer } = await 连接值发送(回退.address, 回退.port, 回退走代理);
-      处理值远程(remoteSock, writer, null);
-    } catch {
-      关闭套接字值(网页套接字382);
+      } catch {}
     }
   }
-  try {
-    // 首跳是否走代理：只走代理 → 必走；优先直连 → 不走；其余按代理是否配置
-    const 首跳走代理 = 仅走代理 && 实际代理已启用 ? true : 启用代理降级 ? false : 实际代理已启用;
-    const {
-      remoteSock: 值套接字358,
-      writer: 值写入器
-    } = await 连接值发送(主机, 端口数字, 首跳走代理);
-    处理值远程(值套接字358, 值写入器, () => {
-      处理值值当前(值套接字358, 值写入器);
-      处理重试连接();
-    });
-  } catch {
-    await 处理重试连接();
-  }
+  await connectNext();
 }
 function 处理值值8数组(块356) {
   if (块356 instanceof Uint8Array) return 块356;
@@ -907,9 +876,9 @@ function 获取唯一标识字节(令牌305) {
   唯一标识字节缓存.set(令牌305, 字节304);
   return 字节304;
 }
-function 处理值唯一标识(字节301, 偏移300, 令牌299) {
-  const 标识298 = 获取唯一标识字节(令牌299);
-  return !!标识298 && 字节301[偏移300] === 标识298[0] && 字节301[偏移300 + 1] === 标识298[1] && 字节301[偏移300 + 2] === 标识298[2] && 字节301[偏移300 + 3] === 标识298[3] && 字节301[偏移300 + 4] === 标识298[4] && 字节301[偏移300 + 5] === 标识298[5] && 字节301[偏移300 + 6] === 标识298[6] && 字节301[偏移300 + 7] === 标识298[7] && 字节301[偏移300 + 8] === 标识298[8] && 字节301[偏移300 + 9] === 标识298[9] && 字节301[偏移300 + 10] === 标识298[10] && 字节301[偏移300 + 11] === 标识298[11] && 字节301[偏移300 + 12] === 标识298[12] && 字节301[偏移300 + 13] === 标识298[13] && 字节301[偏移300 + 14] === 标识298[14] && 字节301[偏移300 + 15] === 标识298[15];
+function 处理值唯一标识(bytes, offset, token) {
+  const id = 获取唯一标识字节(token);
+  return !!id && id.every((byte, index) => bytes[offset + index] === byte);
 }
 function 解析网页套接字值头部(块297, 令牌) {
   const 字节296 = 处理值值8数组(块297);
@@ -1070,20 +1039,18 @@ async function 转发远程数据到WS(远程套接字, 网页套接字278, 头�
   if (!是否有数据 && !本地值276 && 重试值) 重试值();
 }
 async function 处理值用户数据报(用户数据报块, 网页套接字, 值头部, 请求值, 配置快照, signal) {
-  const { 已解析代理5配置: proxy, 是否代理已启用: enabled, 仅走代理: only, 启用代理降级: directFirst } = 配置快照;
-  if (only && !enabled) { 关闭套接字值(网页套接字); return; }
-  let socket;
-  try {
-    const dial = viaProxy => 建立出站连接('8.8.4.4', 53, 用户数据报块, 请求值, proxy, viaProxy, signal, 1);
-    try { socket = await dial(enabled && (only || !directFirst)); }
-    catch (error) {
-      if (signal.aborted || only || !directFirst || !enabled) throw error;
-      socket = await dial(true);
-    }
-    // Keep the DNS resolver and TCP framing; ProxyIP:443 is not a DNS fallback.
-    await 转发远程数据到WS(socket, 网页套接字, 值头部, null);
-  } catch { 关闭套接字值(网页套接字); }
-  finally { try { socket?.close(); } catch {} }
+  for await (const attempt of outboundAttempts(配置快照, '8.8.4.4', 53)) {
+    if (signal.aborted) break;
+    let socket;
+    try {
+      socket = await 建立出站连接(attempt.address, attempt.port, 用户数据报块, 请求值,
+        配置快照.已解析代理5配置, attempt.viaProxy, signal, 1);
+      await 转发远程数据到WS(socket, 网页套接字, 值头部, null);
+      return;
+    } catch {}
+    finally { try { socket?.close(); } catch {} }
+  }
+  关闭套接字值(网页套接字);
 }
 async function 处理值代理连接(地址262, 端口261, 代理配置, 请求值258, 首包数据, open) {
   // 按代理种类分派：隧道走建隧请求，其余保持套接字5 握手
@@ -1407,27 +1374,10 @@ const 连接超时值 = 5000;
 
 const 上限值 = 32;
 
-function 验证唯一标识扩展超文本(标识192, 唯一标识191) {
-  for (let 索引190 = 0; 索引190 < 16; 索引190++) {
-    if (标识192[索引190] !== 唯一标识191[索引190]) {
-      return false;
-    }
-  }
-  return true;
-}
 
-function 解析唯一标识扩展超文本(唯一标识184) {
-  唯一标识184 = 唯一标识184.replaceAll('-', '');
-  const 结果值183 = [];
-  for (let 索引182 = 0; 索引182 < 16; 索引182++) {
-    const 取值181 = parseInt(唯一标识184.substr(索引182 * 2, 2), 16);
-    结果值183.push(取值181);
-  }
-  return 结果值183;
-}
-function 获取扩展超文本缓冲(大小) {
-  return new Uint8Array(new ArrayBuffer(大小 || 值超文本缓冲大小));
-}
+
+
+
 async function 读取扩展超文本头部(本地值180, 唯一标识字符串, signal) {
   const 读取器179 = 本地值180.getReader({
     mode: 'byob'
@@ -1441,7 +1391,7 @@ async function 读取扩展超文本头部(本地值180, 唯一标识字符串, 
     读取器179.cancel().catch(() => {});
   }, 连接超时值);
   try {
-    let 结果值178 = await 读取器179.readAtLeast(1 + 16 + 1, 获取扩展超文本缓冲());
+    let 结果值178 = await 读取器179.readAtLeast(1 + 16 + 1, new Uint8Array(值超文本缓冲大小));
     if (!结果值178.value || 结果值178.value.length < 1 + 16 + 1) {
       throw new Error('header too short');
     }
@@ -1450,9 +1400,7 @@ async function 读取扩展超文本头部(本地值180, 唯一标识字符串, 
     let 缓存 = 结果值178.value;
     本地值177 += 结果值178.value.length;
     const 本地值176 = 缓存[0];
-    const 标识175 = 缓存.slice(1, 1 + 16);
-    const 唯一标识174 = 解析唯一标识扩展超文本(唯一标识字符串);
-    if (!验证唯一标识扩展超文本(标识175, 唯一标识174)) {
+    if (!处理值唯一标识(缓存, 1, 唯一标识字符串)) {
       throw new Error(`invalid UUID`);
     }
     const 值长度173 = 缓存[1 + 16];
@@ -1462,7 +1410,7 @@ async function 读取扩展超文本头部(本地值180, 唯一标识字符串, 
         throw new Error(`header too short`);
       }
       索引 = 地址值1 + 1 - 本地值177;
-      结果值178 = await 读取器179.readAtLeast(索引, 获取扩展超文本缓冲());
+      结果值178 = await 读取器179.readAtLeast(索引, new Uint8Array(值超文本缓冲大小));
       if (!结果值178.value || 结果值178.value.length < 索引) {
         throw new Error('header too short');
       }
@@ -1491,7 +1439,7 @@ async function 读取扩展超文本头部(本地值180, 唯一标识字符串, 
       if (结果值178.done) {
         throw new Error(`read address failed`);
       }
-      结果值178 = await 读取器179.readAtLeast(索引, 获取扩展超文本缓冲());
+      结果值178 = await 读取器179.readAtLeast(索引, new Uint8Array(值超文本缓冲大小));
       if (!结果值178.value || 结果值178.value.length < 索引) {
         throw new Error('read address failed');
       }
@@ -1538,31 +1486,17 @@ async function 读取扩展超文本头部(本地值180, 唯一标识字符串, 
 
 // XHTTP 沿用 WS 的出站策略；其回退由建连失败触发，WS 另有首字节超时重试。
 async function 连接值远程扩展超文本(首包, 请求值扩展, 配置快照, signal) {
-  const { 回退地址, 当前工作器地区, 启用地区匹配, 已解析代理5配置, 是否代理已启用, 仅走代理, 启用代理降级 } = 配置快照;
-  if (仅走代理 && !是否代理已启用) return null;
-  const { hostname: 主机, port: 端口 } = 首包;
-  const 建连 = (地址, 端口值, 走代理) => 建立出站连接(地址, 端口值, null, 请求值扩展, 已解析代理5配置, 走代理, signal);
-  const 首跳走代理 = 是否代理已启用 && (仅走代理 || !启用代理降级);
-  try {
-    return createXHTTPRelay(首包, await 建连(主机, 端口, 首跳走代理), 45_000, signal);
-  } catch {
-    if (signal?.aborted || 仅走代理 && 是否代理已启用) return null;
-  }
-  let 回退走代理 = 是否代理已启用;
-  if (启用代理降级 && 是否代理已启用) {
+  const attempts = outboundAttempts(配置快照, 首包.hostname, 首包.port, () => 获取回退目标(
+    配置快照.回退地址, 配置快照.当前工作器地区, 配置快照.启用地区匹配, 首包.port));
+  for await (const attempt of attempts) {
+    if (signal?.aborted) break;
     try {
-      return createXHTTPRelay(首包, await 建连(主机, 端口, true), 45_000, signal);
-    } catch {
-      if (signal?.aborted) return null;
-      回退走代理 = false;
-    }
+      const socket = await 建立出站连接(attempt.address, attempt.port, null, 请求值扩展,
+        配置快照.已解析代理5配置, attempt.viaProxy, signal);
+      return createXHTTPRelay(首包, socket, 45_000, signal);
+    } catch {}
   }
-  try {
-    const 回退 = await 获取回退目标(回退地址, 当前工作器地区, 启用地区匹配, 端口);
-    return createXHTTPRelay(首包, await 建连(回退.address, 回退.port, 回退走代理), 45_000, signal);
-  } catch {
-    return null;
-  }
+  return null;
 }
 async function 处理扩展超文本客户端(主体128, 唯一标识, 请求值扩展, 配置快照, signal) {
   if (值值197 >= 上限值) {

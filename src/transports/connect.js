@@ -47,3 +47,14 @@ export async function withConnectionDeadline(operation, signal, timeout = 5_000)
     if (!sockets.size) signal?.removeEventListener('abort', abort);
   }
 }
+
+// Resolve fallback addresses only if needed. WS additionally retries its first
+// dial when no reply arrives; DNS supplies no ProxyIP fallback.
+export async function* outboundAttempts(settings, address, port, fallback) {
+  const { 是否代理已启用: enabled, 仅走代理: only, 启用代理降级: directFirst } = settings;
+  if (only && !enabled) return;
+  yield { address, port, viaProxy: enabled && (only || !directFirst), first: true };
+  if (only) return;
+  if (directFirst && enabled) yield { address, port, viaProxy: true };
+  if (fallback) yield { ...await fallback(), viaProxy: enabled && !directFirst };
+}
