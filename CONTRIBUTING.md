@@ -20,18 +20,33 @@ npm run test:all
 | `src/router.js` | 管理路径与端点匹配 |
 | `src/pages/` | 首页、订阅管理页及共享语言判断 |
 | `src/subscriptions/` | 共享节点生成、客户端格式和家宽订阅 |
-| `src/transports/` | 代理解析、XHTTP 填充和流转发 |
-| `src/worker.js` | 请求入口、节点来源与其余传输协议 |
+| `src/transports/outbound.js` | 共用出站顺序、套接字生命周期与代理握手 |
+| `src/transports/protocols.js` | VLESS/Trojan 首包、UUID 和 XHTTP 请求头解析 |
+| `src/transports/sessions.js` | WS/XHTTP 会话、DNS 转发与取消处理 |
+| `src/transports/` 其余模块 | 代理参数、XHTTP 填充与流转发 |
+| `src/worker.js` | 请求入口、节点来源与订阅组装 |
 
 常规测试从实际 Worker 请求入口验证行为，模拟 KV、套接字及 WebSocket，并阻止外网访问。连接测试包含 Cloudflare BYOB 接口的测试适配；它们不能替代实际 Worker 部署测试。
 
 Clash 的 `+.hdslb.com` 查询固定使用两个国内 DoH 解析器，避免可用 CDN 地址被全局 `fallback-filter` 替换。`proxy-server-nameserver` 也使用这两个解析器，单独完成代理节点域名解析，避免境外节点 IP 触发网站备用 DNS 并阻塞建连。网站查询仍使用自定义 DNS 与原有备用策略。主选择组首次导入时选择第一个节点，已有客户端保存的选择仍由客户端决定。YAML 锚点复用相同列表，不改变业务组的节点选择范围或节点顺序；保留上游已有的微软服务和应用净化组，即使默认规则未引用它们。
 
-安装 Mihomo 后，可运行使用真实内核的隔离图片请求和节点域名连接测试：
+`npm ci` 包含固定版本的开发依赖 Playwright。安装 Chromium 后运行真实浏览器的管理页测试：
 
 ```sh
-CFNEW_MIHOMO_BIN=/absolute/path/to/mihomo npm run test:mihomo
+npx playwright install --with-deps chromium
+npm run test:browser
+CFNEW_WORKER_FILE=少年你相信光吗 npm run test:browser
 ```
+
+Linux x86_64 可使用校验官方发布摘要的脚本安装固定版本 Mihomo，再运行真实内核的隔离图片请求和节点域名连接测试；其他平台可设置已有二进制路径：
+
+```sh
+bash scripts/install-mihomo.sh /tmp/cfnew-bin
+CFNEW_MIHOMO_BIN=/tmp/cfnew-bin/mihomo npm run test:mihomo
+CFNEW_WORKER_FILE=少年你相信光吗 CFNEW_MIHOMO_BIN=/tmp/cfnew-bin/mihomo npm run test:mihomo
+```
+
+CI 在 Node 18/24 上检查两种产物的一致性与入口回归，并分别执行两种产物的 Chromium 和 Mihomo 测试。测试工具只用于开发，不进入部署文件。
 
 测试使用本地 DNS、图片服务器和 HTTP 代理，分别验证备用 DNS 不响应时失败、图片策略或节点专用 DNS 生效后成功，并检查成功路径没有查询备用 DNS。节点测试复现公共解析流程，不测试 VMess 的加密、WS 或 TLS。真实网络验收应在原故障网络更新订阅、清理 DNS 缓存，再检查原图片与本地追加节点。
 
@@ -39,7 +54,7 @@ CFNEW_MIHOMO_BIN=/absolute/path/to/mihomo npm run test:mihomo
 
 XHTTP 只对连续 45 秒没有上下行数据的连接执行空闲关闭，上传 EOF 后继续读取远端响应。不完整请求头在 5 秒后返回 408；正常结束、超时和取消均清理读取锁、写入锁及计时器。优选源的超时覆盖响应体读取，失败不会再次发起无超时请求。
 
-后续可继续拆分 WebSocket/TCP/代理握手的剩余实现，并在真实 Worker 上验证连接超时、背压与中断。每次扩大边界前增加入口行为测试。
+WS、XHTTP 和 DNS 共用出站顺序与连接所有权；TCP 建连、代理握手及 WS 首次写入共用 5 秒截止时间。客户端取消时关闭待连接和竞速套接字。`qj=only` 同样约束 DNS，但 DNS 保留原来的 `8.8.4.4:53` 目标和 TCP 帧格式，不使用 ProxyIP 的 443 端口作为 DNS 回退。公网验收仍应在实际 Worker/Pages 上检查连接超时、背压与中断。
 
 配置 API 在写入 KV 前检查字段类型、开关/出站/ALPN 枚举和长度；空字符串或
 `null` 继续表示恢复环境变量和默认值。未知扩展字段保留。无效 JSON 和字段返回
