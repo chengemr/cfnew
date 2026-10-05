@@ -28,7 +28,7 @@ for (const u of [undefined, '', 'invalid', '11111111-1111-4111-8111-11111111111g
 }
 
 for (const body of [null, [], 'text', { homepage: {} }, { yx: [] }, { ev: 'perhaps' },
-  { qj: 'maybe' }, { alpn: 'garbage' }, { d: '/a/../b' }, { homepage: 'javascript:alert(1)' },
+  { qj: 'maybe' }, { alpn: 'garbage' }, { d: '/a/../b' }, { d: '/' }, { d: '/a/%2e%2e/b' }, { d: '/路径' }, { homepage: 'javascript:alert(1)' },
   { homepage: 'x'.repeat(8193) }, JSON.parse('{"__proto__":{"polluted":true}}')]) {
   test(`config rejects invalid body ${JSON.stringify(body).slice(0, 90)} without KV writes`, async t => {
     const { worker } = await loadWorker(t);
@@ -220,4 +220,23 @@ test('homepage headers ignoring abort cannot hold a request past its deadline', 
   assert.equal(response?.status, 200);
   await pending;
   assert.equal(timers.pending.size, 0);
+});
+
+test('accepted API, region and preferred switches use their canonical behavior', async t => {
+  const { worker } = await loadWorker(t);
+  const C = mockKV();
+  const env = environment({ C });
+  const saved = await request(worker, env, configPath, post({ ae: true, rm: false, yxby: 'ON' }));
+  assert.equal(saved.status, 200);
+  const config = (await saved.json()).config;
+  assert.deepEqual([config.ae, config.rm, config.yxby], ['yes', 'no', 'yes']);
+  assert.equal((await request(worker, env, preferredPath)).status, 200);
+});
+
+test('an optional null preferred name keeps the default-name behavior', async t => {
+  const { worker } = await loadWorker(t);
+  const env = environment({ C: mockKV({ ae: 'yes' }) });
+  const response = await request(worker, env, preferredPath, post({ ip: 'example.com', name: null }));
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).data.addedIPs[0].name, 'API优选-example.com:443');
 });

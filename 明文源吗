@@ -413,7 +413,14 @@ User-Agent: Mozilla/5.0\r
 Proxy-Connection: Keep-Alive\r
 `;
   if (隧道用户) {
-    请求头 += `Proxy-Authorization: Basic ${btoa(String.fromCharCode(...new TextEncoder().encode(`${隧道用户}:${隧道密码 || ""}`)))}\r
+    const credentials = `${隧道用户}:${隧道密码 || ""}`;
+    let authorization;
+    try {
+      authorization = btoa(credentials);
+    } catch {
+      authorization = btoa(String.fromCharCode(...new TextEncoder().encode(credentials)));
+    }
+    请求头 += `Proxy-Authorization: Basic ${authorization}\r
 `;
   }
   请求头 += "\r\n";
@@ -469,20 +476,24 @@ function prependSocket(套接字, 残留数据) {
       上游读取器 = 套接字.readable.getReader();
     },
     async pull(控制器) {
-      const {
-        value: 分片,
-        done: 已结束
-      } = await 上游读取器.read();
-      if (已结束) {
-        控制器.close();
-        return;
-      }
-      控制器.enqueue(分片);
-    },
-    cancel(原因) {
       try {
-        上游读取器?.cancel(原因);
-      } catch {
+        const { value, done } = await 上游读取器.read();
+        if (done) {
+          上游读取器.releaseLock();
+          控制器.close();
+          return;
+        }
+        控制器.enqueue(value);
+      } catch (error) {
+        上游读取器.releaseLock();
+        throw error;
+      }
+    },
+    async cancel(原因) {
+      try {
+        await 上游读取器.cancel(原因);
+      } finally {
+        上游读取器.releaseLock();
       }
     }
   });
@@ -1745,6 +1756,37 @@ async function fetchBytes(url, options = {}, { timeout = 3e3, maxBytes = 1024 * 
   }
 }
 
+// src/router.js
+function isUUID(字符串) {
+  const 用户正则 = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  return 用户正则.test(字符串);
+}
+function normalizePath(路径) {
+  const 文本 = String(路径 || "").trim();
+  if (!文本) return "";
+  const 完整路径 = 文本.startsWith("/") ? 文本 : "/" + 文本;
+  return 完整路径.length > 1 && 完整路径.endsWith("/") ? 完整路径.slice(0, -1) : 完整路径;
+}
+function resolveManagementRoute(路径, 自定义路径值, 令牌) {
+  const 请求路径 = normalizePath(路径);
+  const 自定义基础路径 = normalizePath(自定义路径值);
+  const 基础路径 = 自定义基础路径 || "/" + 令牌;
+  const 后缀 = 请求路径 === 基础路径 ? "" : 请求路径.startsWith(基础路径 + "/") ? 请求路径.slice(基础路径.length) : null;
+  const 路由 = {
+    "": "page",
+    "/sub": "subscription",
+    "/api/config": "config",
+    "/api/preferred-ips": "preferred",
+    "/region": "region",
+    "/test-api": "test"
+  }[后缀];
+  if (路由) return 路由;
+  if (请求路径.endsWith("/api/config") || 请求路径.endsWith("/api/preferred-ips")) return "invalid-api";
+  const 首段 = 请求路径.split("/")[1];
+  if (isUUID(首段) && (自定义基础路径 || 首段 !== 令牌)) return "denied";
+  return null;
+}
+
 // src/validation.js
 var switches = /* @__PURE__ */ new Set([
   "ev",
@@ -1796,12 +1838,15 @@ function validateConfig(changes) {
         return "无效的上游代理地址";
       }
     }
-    if (key === "d" && (/\s|[?#]/.test(value) || value.includes("//") || value.split("/").some((part) => part === "." || part === ".."))) return "无效的管理路径";
+    if (key === "d") {
+      const path = normalizePath(value);
+      if (path === "/" || /\s|[?#]/.test(value) || value.includes("//") || new URL(path, "https://path.invalid").pathname !== path) return "无效的管理路径";
+    }
   }
   return null;
 }
 function validatePreferredName(name) {
-  return name === void 0 || name === "" || typeof name === "string" && name.length <= 256 && !/[,#\r\n]/.test(name);
+  return name === void 0 || name === null || name === "" || typeof name === "string" && name.length <= 256 && !/[,#\r\n]/.test(name);
 }
 
 // src/api.js
@@ -1828,7 +1873,7 @@ async function handleConfig(request, env, store, snapshot) {
     const saved = await store.update((config) => {
       for (const [key, value] of Object.entries(changes)) {
         if (value === "" || value === null || value === void 0) delete config[key];
-        else config[key] = value;
+        else config[key] = ["ae", "rm", "yxby"].includes(key) ? normalizeSwitch(value) : value;
       }
       return config;
     });
@@ -3321,37 +3366,6 @@ function generateNodeLinks(settings, nodes, user, workerHost, nameNode, explicit
     }
   }
   return links;
-}
-
-// src/router.js
-function isUUID(字符串) {
-  const 用户正则 = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  return 用户正则.test(字符串);
-}
-function normalizePath(路径) {
-  const 文本 = String(路径 || "").trim();
-  if (!文本) return "";
-  const 完整路径 = 文本.startsWith("/") ? 文本 : "/" + 文本;
-  return 完整路径.length > 1 && 完整路径.endsWith("/") ? 完整路径.slice(0, -1) : 完整路径;
-}
-function resolveManagementRoute(路径, 自定义路径值, 令牌) {
-  const 请求路径 = normalizePath(路径);
-  const 自定义基础路径 = normalizePath(自定义路径值);
-  const 基础路径 = 自定义基础路径 || "/" + 令牌;
-  const 后缀 = 请求路径 === 基础路径 ? "" : 请求路径.startsWith(基础路径 + "/") ? 请求路径.slice(基础路径.length) : null;
-  const 路由 = {
-    "": "page",
-    "/sub": "subscription",
-    "/api/config": "config",
-    "/api/preferred-ips": "preferred",
-    "/region": "region",
-    "/test-api": "test"
-  }[后缀];
-  if (路由) return 路由;
-  if (请求路径.endsWith("/api/config") || 请求路径.endsWith("/api/preferred-ips")) return "invalid-api";
-  const 首段 = 请求路径.split("/")[1];
-  if (isUUID(首段) && (自定义基础路径 || 首段 !== 令牌)) return "denied";
-  return null;
 }
 
 // src/pages/language.js

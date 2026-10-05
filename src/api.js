@@ -1,4 +1,4 @@
-import { resolveConfig } from './config.js';
+import { normalizeSwitch, resolveConfig } from './config.js';
 import { isIPAddress, isDomain, normalizePort, parsePreferredList, serializePreferredList } from './preferred.js';
 import { validateConfig, validatePreferredName } from './validation.js';
 
@@ -24,7 +24,7 @@ export async function handleConfig(request, env, store, snapshot) {
     const saved = await store.update(config => {
       for (const [key, value] of Object.entries(changes)) {
         if (value === '' || value === null || value === undefined) delete config[key];
-        else config[key] = value;
+        else config[key] = ['ae', 'rm', 'yxby'].includes(key) ? normalizeSwitch(value) : value;
       }
       return config;
     });

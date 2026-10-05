@@ -272,7 +272,11 @@ async function connectHTTP(address, port, 代理配置, fetcher, payload, open) 
   const 目标地址 = `${目标主机}:${port}`;
   let 请求头 = `CONNECT ${目标地址} HTTP/1.1\r\n` + `Host: ${目标地址}\r\n` + `User-Agent: Mozilla/5.0\r\n` + `Proxy-Connection: Keep-Alive\r\n`;
   if (隧道用户) {
-    请求头 += `Proxy-Authorization: Basic ${btoa(String.fromCharCode(...new TextEncoder().encode(`${隧道用户}:${隧道密码 || ''}`)))}\r\n`;
+    const credentials = `${隧道用户}:${隧道密码 || ''}`;
+    let authorization;
+    try { authorization = btoa(credentials); }
+    catch { authorization = btoa(String.fromCharCode(...new TextEncoder().encode(credentials))); }
+    请求头 += `Proxy-Authorization: Basic ${authorization}\r\n`;
   }
   请求头 += '\r\n';
   const 写入器 = 套接字.writable.getWriter();
@@ -328,20 +332,15 @@ function prependSocket(套接字, 残留数据) {
       上游读取器 = 套接字.readable.getReader();
     },
     async pull(控制器) {
-      const {
-        value: 分片,
-        done: 已结束
-      } = await 上游读取器.read();
-      if (已结束) {
-        控制器.close();
-        return;
-      }
-      控制器.enqueue(分片);
-    },
-    cancel(原因) {
       try {
-        上游读取器?.cancel(原因);
-      } catch {}
+        const { value, done } = await 上游读取器.read();
+        if (done) { 上游读取器.releaseLock(); 控制器.close(); return; }
+        控制器.enqueue(value);
+      } catch (error) { 上游读取器.releaseLock(); throw error; }
+    },
+    async cancel(原因) {
+      try { await 上游读取器.cancel(原因); }
+      finally { 上游读取器.releaseLock(); }
     }
   });
   return {
