@@ -255,60 +255,48 @@ function parsePreferredSources(value) {
 }
 
 // src/transports/proxy.js
-var 错误_无效代理地址 = atob("SW52YWxpZCBTT0NLUyBhZGRyZXNzIGZvcm1hdA==");
-var 前缀_套接字5 = atob("c29ja3M1Oi8v");
-var 前缀_套接字 = atob("c29ja3M6Ly8=");
-var 前缀_超文本 = atob("aHR0cDovLw==");
-var 前缀_安全超文本 = atob("aHR0cHM6Ly8=");
-var 代理种类_套接字5 = "p5";
-var 代理种类_隧道 = "pt";
-var 代理种类_安全隧道 = "pts";
-function parseProxy(地址249) {
-  let 剩余地址 = String(地址249 || "").trim();
-  let 代理种类 = 代理种类_套接字5;
-  const 小写地址 = 剩余地址.toLowerCase();
-  if (小写地址.startsWith(前缀_安全超文本)) {
-    代理种类 = 代理种类_安全隧道;
-    剩余地址 = 剩余地址.slice(前缀_安全超文本.length);
-  } else if (小写地址.startsWith(前缀_超文本)) {
-    代理种类 = 代理种类_隧道;
-    剩余地址 = 剩余地址.slice(前缀_超文本.length);
-  } else if (小写地址.startsWith(前缀_套接字5)) {
-    剩余地址 = 剩余地址.slice(前缀_套接字5.length);
-  } else if (小写地址.startsWith(前缀_套接字)) {
-    剩余地址 = 剩余地址.slice(前缀_套接字.length);
-  }
-  const 路径位置 = 剩余地址.indexOf("/");
-  if (路径位置 >= 0) 剩余地址 = 剩余地址.slice(0, 路径位置);
-  if (!剩余地址) throw new Error(错误_无效代理地址);
-  let [本地值248, 本地值247] = 剩余地址.split("@").reverse();
-  let 本地值246, 密码245, 主机名244, 代理端口;
-  if (本地值247) {
-    const 本地值243 = 本地值247.split(":");
-    if (本地值243.length !== 2) throw new Error(错误_无效代理地址);
-    [本地值246, 密码245] = 本地值243;
-  }
-  const 本地值242 = 本地值248.split(":");
-  const 末段值 = 本地值242.pop();
-  代理端口 = Number(末段值);
-  if (isNaN(代理端口)) {
-    if (代理种类 === 代理种类_套接字5) throw new Error(错误_无效代理地址);
-    本地值242.push(末段值);
-    代理端口 = 代理种类 === 代理种类_安全隧道 ? 443 : 80;
-  }
-  主机名244 = 本地值242.join(":");
-  if (!主机名244) throw new Error(错误_无效代理地址);
-  if (主机名244.includes(":") && !/^\[.*\]$/.test(主机名244)) throw new Error(错误_无效代理地址);
-  return {
-    username: 本地值246,
-    password: 密码245,
-    hostname: 主机名244,
-    socksPort: 代理端口,
-    kind: 代理种类
+function parseProxy(input) {
+  let address = String(input || "").trim();
+  const scheme = address.match(/^(socks5?|https?):\/\//i)?.[1].toLowerCase();
+  const kind = scheme === "https" ? "pts" : scheme === "http" ? "pt" : "p5";
+  if (scheme) address = address.slice(scheme.length + 3);
+  address = address.split("/")[0];
+  const invalid = () => {
+    throw new Error("Invalid SOCKS address format");
   };
+  const at = address.lastIndexOf("@");
+  let username, password;
+  if (at >= 0) {
+    const auth = address.slice(0, at).split(":");
+    if (auth.length !== 2) invalid();
+    [username, password] = auth;
+    address = address.slice(at + 1);
+  }
+  const bracketed = address.match(/^\[([^\]]+)\](?::(.*))?$/);
+  let hostname, port;
+  if (bracketed) {
+    if (!bracketed[1].includes(":") || !isIPAddress(bracketed[1])) invalid();
+    hostname = `[${bracketed[1]}]`;
+    port = bracketed[2];
+  } else {
+    const parts = address.split(":");
+    if (parts.length > 2) invalid();
+    [hostname, port] = parts;
+    if (!hostname || /[\s@?#\[\]]/.test(hostname)) invalid();
+  }
+  const socksPort = port === void 0 && kind !== "p5" ? kind === "pts" ? 443 : 80 : normalizePort(port);
+  if (socksPort === null) invalid();
+  if (kind === "p5" && [username, password].some((value) => new TextEncoder().encode(value || "").length > 255)) invalid();
+  return { username, password, hostname, socksPort, kind };
 }
 
 // src/runtime.js
+function getAuthenticationToken(env) {
+  const token = env.u || env.U;
+  if (typeof token !== "string") return null;
+  const normalized = token.trim().toLowerCase();
+  return /^(?:[0-9a-f]{32}|[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})$/.test(normalized) ? normalized : null;
+}
 function createSettings(env, stored) {
   const config = Object.freeze(resolveConfig(env, stored));
   const { addresses, domains } = parsePreferredSources(config.yx);
@@ -327,7 +315,7 @@ function createSettings(env, stored) {
   }
   return Object.freeze({
     config,
-    认证令牌: String(env.u || env.U || "351c9981-04b6-4103-aa4b-864aa9c91469").toLowerCase(),
+    认证令牌: getAuthenticationToken(env),
     手动工作器地区: region,
     当前工作器地区: region || (fallback ? "CUSTOM" : "CF"),
     启用地区匹配: String(config.rm || "").toLowerCase() !== "no",
@@ -358,7 +346,125 @@ function createSettings(env, stored) {
   });
 }
 
+// src/http.js
+async function fetchBytes(url, options = {}, { timeout = 3e3, maxBytes = 1024 * 1024 } = {}) {
+  const controller = new AbortController();
+  let reader, timer;
+  const deadline = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      const error = new DOMException("Upstream request timeout", "TimeoutError");
+      controller.abort(error);
+      reader?.cancel(error).catch(() => {
+      });
+      reject(error);
+    }, timeout);
+  });
+  try {
+    return await Promise.race([(async () => {
+      const response = await fetch(url, { ...options, signal: controller.signal });
+      if (controller.signal.aborted || !response.ok) {
+        response.body?.cancel().catch(() => {
+        });
+        if (controller.signal.aborted) throw controller.signal.reason;
+        return { response, bytes: null };
+      }
+      if (Number(response.headers.get("Content-Length")) > maxBytes) {
+        response.body?.cancel().catch(() => {
+        });
+        throw new Error("Upstream response too large");
+      }
+      const chunks = [];
+      let size = 0;
+      reader = response.body?.getReader();
+      while (reader) {
+        const { value, done } = await reader.read();
+        if (controller.signal.aborted) throw controller.signal.reason;
+        if (done) break;
+        size += value.byteLength;
+        if (size > maxBytes) throw new Error("Upstream response too large");
+        chunks.push(value);
+      }
+      const bytes = new Uint8Array(size);
+      let offset = 0;
+      for (const chunk of chunks) {
+        bytes.set(chunk, offset);
+        offset += chunk.byteLength;
+      }
+      return { response, bytes };
+    })(), deadline]);
+  } finally {
+    clearTimeout(timer);
+    controller.abort();
+    reader?.cancel().catch(() => {
+    });
+    try {
+      reader?.releaseLock();
+    } catch {
+    }
+  }
+}
+
+// src/validation.js
+var switches = /* @__PURE__ */ new Set([
+  "ev",
+  "et",
+  "ex",
+  "ech",
+  "ena",
+  "epd",
+  "epi",
+  "egi",
+  "dkby",
+  "ipv4",
+  "ipv6",
+  "ispMobile",
+  "ispUnicom",
+  "ispTelecom",
+  "jk",
+  "ae",
+  "rm",
+  "yxby"
+]);
+var switchValues = /* @__PURE__ */ new Set(["yes", "no", "true", "false", "1", "0", "on", "off"]);
+var alpnValues = /* @__PURE__ */ new Set(["h3", "h2", "http/1.1", "h3,h2", "h2,http/1.1", "h3,h2,http/1.1"]);
+function validateConfig(changes) {
+  if (!changes || typeof changes !== "object" || Array.isArray(changes)) return "配置必须是 JSON 对象";
+  for (const [key, value] of Object.entries(changes)) {
+    if (["__proto__", "constructor", "prototype"].includes(key) || key.length > 128) return "无效的配置键";
+    if (value === null || value === "") continue;
+    if (JSON.stringify(value).length > (key === "yx" ? 256 * 1024 : 8192)) return key + " 过长";
+    if (!Object.hasOwn(defaults, key)) continue;
+    if (switches.has(key)) {
+      if (!["string", "number", "boolean"].includes(typeof value) || !switchValues.has(String(value).trim().toLowerCase())) return key + " 必须是开关值";
+      continue;
+    }
+    if (typeof value !== "string") return key + " 必须是字符串";
+    if (key === "qj" && !["no", "only"].includes(value.toLowerCase())) return "无效的出站方式";
+    if (key === "alpn" && !alpnValues.has(value.trim())) return "无效的 ALPN";
+    if (["homepage", "yxURL", "customDNS", "scu"].includes(key)) {
+      try {
+        if (!["http:", "https:"].includes(new URL(value).protocol)) return key + " 仅支持 HTTP(S)";
+      } catch {
+        return key + " 必须是完整 URL";
+      }
+    }
+    if (key === "s") {
+      try {
+        parseProxy(value);
+      } catch {
+        return "无效的上游代理地址";
+      }
+    }
+    if (key === "d" && (/\s|[?#]/.test(value) || value.includes("//") || value.split("/").some((part) => part === "." || part === ".."))) return "无效的管理路径";
+  }
+  return null;
+}
+function validatePreferredName(name) {
+  return name === void 0 || name === "" || typeof name === "string" && name.length <= 256 && !/[,#\r\n]/.test(name);
+}
+
 // src/api.js
+var badRequest = (message) => Response.json({ success: false, error: message, message }, { status: 400 });
 async function handleConfig(request, env, store, snapshot) {
   if (request.method !== "GET" && request.method !== "POST") {
     return Response.json({ error: "Method not allowed" }, { status: 405 });
@@ -370,7 +476,14 @@ async function handleConfig(request, env, store, snapshot) {
     return Response.json({ ...resolveConfig(env, snapshot), kvEnabled: true });
   }
   try {
-    const changes = await request.json();
+    let changes;
+    try {
+      changes = await request.json();
+    } catch {
+      return badRequest("无效的 JSON");
+    }
+    const invalid = validateConfig(changes);
+    if (invalid) return badRequest(invalid);
     const saved = await store.update((config) => {
       for (const [key, value] of Object.entries(changes)) {
         if (value === "" || value === null || value === void 0) delete config[key];
@@ -407,27 +520,36 @@ async function handlePreferred(request, env, store, snapshot) {
     }, { status: 405 });
   }
   try {
-    const body = await request.json();
+    let body;
+    try {
+      body = await request.json();
+    } catch {
+      return badRequest("无效的 JSON");
+    }
     if (request.method === "POST") {
       const items = Array.isArray(body) ? body : [body];
       if (!items.length) return Response.json({ success: false, error: "请求数据为空", message: "请提供IP数据" }, { status: 400 });
       const added = [], skipped = [], errors = [];
+      for (const item of items) {
+        if (!item || typeof item !== "object" || typeof item.ip !== "string" || !isIPAddress(item.ip) && !isDomain(item.ip)) {
+          errors.push({ ip: typeof item?.ip === "string" ? item.ip : "未知", reason: "无效的IP或域名格式" });
+        } else if (normalizePort(item.port, 443) === null) {
+          errors.push({ ip: item.ip, reason: "端口必须是1到65535之间的整数" });
+        } else if (!validatePreferredName(item.name)) {
+          errors.push({ ip: item.ip, reason: "名称必须是256字符以内的字符串，不能包含逗号、#或换行" });
+        }
+      }
+      if (errors.length) return Response.json({
+        success: false,
+        added: 0,
+        errors: errors.length,
+        message: "请求包含无效节点，未保存",
+        data: { errors }
+      }, { status: 400 });
       await store.update((stored) => {
         const list = parsePreferredList(resolveConfig(env, stored).yx);
         for (const item of items) {
-          if (!item.ip) {
-            errors.push({ ip: "未知", reason: "IP地址是必需的" });
-            continue;
-          }
           const port2 = normalizePort(item.port, 443);
-          if (port2 === null) {
-            errors.push({ ip: item.ip, reason: "端口必须是1到65535之间的整数" });
-            continue;
-          }
-          if (!isIPAddress(item.ip) && !isDomain(item.ip)) {
-            errors.push({ ip: item.ip, reason: "无效的IP或域名格式" });
-            continue;
-          }
           if (list.some((node2) => node2.ip === item.ip && node2.port === port2)) {
             skipped.push({ ip: item.ip, port: port2, reason: "已存在" });
             continue;
@@ -456,6 +578,8 @@ async function handlePreferred(request, env, store, snapshot) {
         }
       });
     }
+    if (!body || typeof body !== "object" || Array.isArray(body)) return badRequest("请求必须是 JSON 对象");
+    if (body.all !== true && (typeof body.ip !== "string" || !isIPAddress(body.ip) && !isDomain(body.ip))) return badRequest("无效的IP或域名格式");
     if (body.all !== true && !body.ip) return Response.json({
       success: false,
       error: "IP地址是必需的",
@@ -3104,8 +3228,8 @@ var 文本_代理保持 = "Proxy-Connection: Keep-Alive";
 var 文本_用户代理头 = "User-Agent: Mozilla/5.0";
 var 文本_换行 = "\r\n";
 var 文本_响应前缀 = "HTTP/";
-var 代理种类_隧道2 = "pt";
-var 代理种类_安全隧道2 = "pts";
+var 代理种类_隧道 = "pt";
+var 代理种类_安全隧道 = "pts";
 var 地址类型_四版 = 1;
 var 地址类型_网址 = 2;
 var 地址类型_六版 = 3;
@@ -3137,11 +3261,13 @@ async function 获取回退目标(回退地址, 地区, 地区匹配, 端口) {
 var worker_default = {
   async fetch(请求735, 本地值734, 本地值733) {
     try {
+      const 认证令牌 = getAuthenticationToken(本地值734);
+      if (!认证令牌) return Response.json({ error: "Configure U with a valid UUID before using this Worker." }, { status: 503 });
       const 是否网页套接字 = 请求735.headers.get("Upgrade") === "websocket";
       const 是否值732 = 请求735.method === "POST";
       const 请求网址731 = new URL(请求735.url);
       if (!(本地值734.C || 本地值734.c) && !是否网页套接字 && !是否值732 && 请求网址731.pathname !== "/") {
-        const 值值728 = (本地值734.u || 本地值734.U || "").toLowerCase();
+        const 值值728 = 认证令牌;
         const 值值727 = (本地值734.d || 本地值734.D || "").toLowerCase();
         const 首次值 = 请求网址731.pathname.split("/").filter(Boolean)[0] || "";
         const 清理值 = normalizePath(值值727);
@@ -3205,9 +3331,9 @@ var worker_default = {
         }
         if (请求网址731.pathname === "/") {
           const 自定义值 = settings.config.homepage;
-          if (自定义值 && 自定义值.trim()) {
+          if (typeof 自定义值 === "string" && 自定义值.trim()) {
             try {
-              const 值响应 = await fetch(自定义值.trim(), {
+              const { response: 值响应, bytes: 首页字节 } = await fetchBytes(自定义值.trim(), {
                 method: "GET",
                 headers: {
                   "User-Agent": 请求735.headers.get("User-Agent") || "Mozilla/5.0",
@@ -3215,10 +3341,10 @@ var worker_default = {
                   "Accept-Language": 请求735.headers.get("Accept-Language") || "en-US,en;q=0.9"
                 },
                 redirect: "follow"
-              });
+              }, { timeout: 5e3, maxBytes: 2 * 1024 * 1024 });
               if (值响应.ok) {
                 const 内容类型672 = 值响应.headers.get("Content-Type") || "text/html; charset=utf-8";
-                const 内容671 = await 值响应.text();
+                const 内容671 = new TextDecoder().decode(首页字节);
                 return new Response(内容671, {
                   status: 值响应.status,
                   headers: {
@@ -3440,13 +3566,13 @@ async function 获取值地址列表(settings) {
     const 时间戳434 = String(Date.now());
     const 内层摘要434 = await 计算值摘要(decodeBase64Text("RGRsVHh0TjBzVU91"));
     const 请求密钥434 = await 计算值摘要(内层摘要434 + decodeBase64Text("NzBjbG91ZGZsYXJlYXBpa2V5") + 时间戳434);
-    const 响应434 = await fetch(`${decodeBase64Text("aHR0cHM6Ly9hcGkudW91aW4uY29tL2luZGV4LnBocC9pbmRleC9DbG91ZGZsYXJl")}?key=${请求密钥434}&time=${时间戳434}`, {
+    const { response: 响应434, bytes: 优选字节 } = await fetchBytes(`${decodeBase64Text("aHR0cHM6Ly9hcGkudW91aW4uY29tL2luZGV4LnBocC9pbmRleC9DbG91ZGZsYXJl")}?key=${请求密钥434}&time=${时间戳434}`, {
       headers: {
         "User-Agent": "Mozilla/5.0"
       }
     });
     if (!响应434.ok) return [];
-    const 数据434 = await 响应434.json();
+    const 数据434 = JSON.parse(new TextDecoder().decode(优选字节));
     const 分组集合434 = 数据434 && 数据434.data;
     if (!分组集合434) return [];
     const 结果列表433 = [];
@@ -4119,7 +4245,7 @@ async function 处理值用户数据报(用户数据报块, 网页套接字, 值
   }
 }
 async function 处理值代理连接(地址262, 端口261, 代理配置, 请求值258, 首包数据, open) {
-  if (代理配置 && (代理配置.kind === 代理种类_隧道2 || 代理配置.kind === 代理种类_安全隧道2)) {
+  if (代理配置 && (代理配置.kind === 代理种类_隧道 || 代理配置.kind === 代理种类_安全隧道)) {
     return 处理值隧道连接(地址262, 端口261, 代理配置, 请求值258, 首包数据, open);
   }
   const {
@@ -4157,7 +4283,9 @@ async function 处理值代理连接(地址262, 端口261, 代理配置, 请求�
     if (选中方法 === 2) {
       if (!本地值260 || !密码259) throw new Error(错误_代理需要认证);
       const 编码器252 = new TextEncoder();
-      const 认证请求 = new Uint8Array([1, 本地值260.length, ...编码器252.encode(本地值260), 密码259.length, ...编码器252.encode(密码259)]);
+      const 用户字节 = 编码器252.encode(本地值260), 密码字节 = 编码器252.encode(密码259);
+      if (用户字节.length > 255 || 密码字节.length > 255) throw new Error(错误_代理认证失败);
+      const 认证请求 = new Uint8Array([1, 用户字节.length, ...用户字节, 密码字节.length, ...密码字节]);
       await 写入器255.write(认证请求);
       本地值253 = await 读满(2);
       if (本地值253[0] !== 1 || 本地值253[1] !== 0) throw new Error(错误_代理认证失败);
@@ -4165,6 +4293,7 @@ async function 处理值代理连接(地址262, 端口261, 代理配置, 请求�
     }
     const 编码器251 = new TextEncoder();
     const 目标字节 = 编码器251.encode(规范化目标地址(地址262));
+    if (目标字节.length > 255) throw new Error(错误_代理连接失败);
     const 本地值250 = new Uint8Array([3, 目标字节.length, ...目标字节]);
     await 写入器255.write(new Uint8Array([5, 1, 0, ...本地值250, 端口261 >> 8, 端口261 & 255]));
     本地值253 = await 读满(4);
@@ -4211,7 +4340,7 @@ async function 处理值隧道连接(地址238值, 端口237值, 代理配置, �
     socksPort: 隧道端口,
     kind: 隧道种类
   } = 代理配置;
-  const 连接选项 = 隧道种类 === 代理种类_安全隧道2 ? {
+  const 连接选项 = 隧道种类 === 代理种类_安全隧道 ? {
     secureTransport: "on",
     allowHalfOpen: false
   } : void 0;
@@ -4225,7 +4354,7 @@ async function 处理值隧道连接(地址238值, 端口237值, 代理配置, �
   const 目标地址 = `${目标主机}:${端口237值}`;
   let 请求头 = `${文本_连接方法} ${目标地址}${文本_协议版本}${文本_换行}${文本_主机头}${目标地址}${文本_换行}${文本_用户代理头}${文本_换行}${文本_代理保持}${文本_换行}`;
   if (隧道用户) {
-    请求头 += `${文本_代理认证头}${btoa(`${隧道用户}:${隧道密码 || ""}`)}${文本_换行}`;
+    请求头 += `${文本_代理认证头}${btoa(String.fromCharCode(...new TextEncoder().encode(`${隧道用户}:${隧道密码 || ""}`)))}${文本_换行}`;
   }
   请求头 += 文本_换行;
   const 写入器 = 套接字.writable.getWriter();
@@ -4684,16 +4813,11 @@ async function 获取优选接口(网址列表, 默认端口 = "443", 超时 = 3
   if (!网址列表?.length) return [];
   const 结果列表 = /* @__PURE__ */ new Set();
   await Promise.allSettled(网址列表.map(async (网址) => {
-    const 控制器 = new AbortController();
-    const 超时标识 = setTimeout(() => 控制器.abort(), 超时);
     try {
-      const 响应 = await fetch(网址, {
-        signal: 控制器.signal
-      });
+      const { response: 响应, bytes: 缓冲 } = await fetchBytes(网址, {}, { timeout: 超时 });
       if (!响应.ok) return;
       let 文本 = "";
       try {
-        const 缓冲 = await 响应.arrayBuffer();
         const 内容类型 = (响应.headers.get("content-type") || "").toLowerCase();
         const 字符集 = 内容类型.match(/charset=([^\s;]+)/i)?.[1]?.toLowerCase() || "";
         let 解码器列表 = ["utf-8", "gb2312"];
@@ -4716,7 +4840,7 @@ async function 获取优选接口(网址列表, 默认端口 = "443", 超时 = 3
           }
         }
         if (!解码成功) {
-          文本 = await 响应.text();
+          文本 = new TextDecoder().decode(缓冲);
         }
         if (!文本 || 文本.trim().length === 0) {
           return;
@@ -4762,8 +4886,6 @@ async function 获取优选接口(网址列表, 默认端口 = "443", 超时 = 3
         }
       }
     } catch {
-    } finally {
-      clearTimeout(超时标识);
     }
   }));
   return Array.from(结果列表);

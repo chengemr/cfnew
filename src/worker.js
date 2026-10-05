@@ -4,7 +4,8 @@ import { connect as 连接 } from 'cloudflare:sockets';
 import { decodeBase64Text as 解码64 } from './encoding.js';
 
 import { getConfigStore } from './storage.js';
-import { createSettings } from './runtime.js';
+import { createSettings, getAuthenticationToken } from './runtime.js';
+import { fetchBytes } from './http.js';
 import { handleConfig, handlePreferred } from './api.js';
 import { parseAddress as 解析地址值端口 } from './preferred.js';
 import { parseProxy as 解析代理配置 } from './transports/proxy.js';
@@ -120,11 +121,13 @@ async function 获取回退目标(回退地址, 地区, 地区匹配, 端口) {
 export default {
   async fetch(请求735, 本地值734, 本地值733) {
     try {
+      const 认证令牌 = getAuthenticationToken(本地值734);
+      if (!认证令牌) return Response.json({ error: 'Configure U with a valid UUID before using this Worker.' }, { status: 503 });
       const 是否网页套接字 = 请求735.headers.get('Upgrade') === "websocket";
       const 是否值732 = 请求735.method === 'POST';
       const 请求网址731 = new URL(请求735.url);
       if (!(本地值734.C || 本地值734.c) && !是否网页套接字 && !是否值732 && 请求网址731.pathname !== '/') {
-        const 值值728 = (本地值734.u || 本地值734.U || '').toLowerCase();
+        const 值值728 = 认证令牌;
         const 值值727 = (本地值734.d || 本地值734.D || '').toLowerCase();
         const 首次值 = 请求网址731.pathname.split('/').filter(Boolean)[0] || '';
         const 清理值 = 规范化管理路径(值值727);
@@ -191,10 +194,10 @@ export default {
         if (请求网址731.pathname === '/') {
           // 检查是否有自定义首页URL配置
           const 自定义值 = settings.config.homepage;
-          if (自定义值 && 自定义值.trim()) {
+          if (typeof 自定义值 === 'string' && 自定义值.trim()) {
             try {
               // 从自定义URL获取内容
-              const 值响应 = await fetch(自定义值.trim(), {
+              const { response: 值响应, bytes: 首页字节 } = await fetchBytes(自定义值.trim(), {
                 method: 'GET',
                 headers: {
                   'User-Agent': 请求735.headers.get('User-Agent') || 'Mozilla/5.0',
@@ -202,11 +205,11 @@ export default {
                   'Accept-Language': 请求735.headers.get('Accept-Language') || 'en-US,en;q=0.9'
                 },
                 redirect: 'follow'
-              });
+              }, { timeout: 5_000, maxBytes: 2 * 1024 * 1024 });
               if (值响应.ok) {
                 // 获取响应内容
                 const 内容类型672 = 值响应.headers.get('Content-Type') || 'text/html; charset=utf-8';
-                const 内容671 = await 值响应.text();
+                const 内容671 = new TextDecoder().decode(首页字节);
 
                 // 返回自定义首页内容
                 return new Response(内容671, {
@@ -423,13 +426,13 @@ async function 获取值地址列表(settings) {
     const 时间戳434 = String(Date.now());
     const 内层摘要434 = await 计算值摘要(解码64('RGRsVHh0TjBzVU91'));
     const 请求密钥434 = await 计算值摘要(内层摘要434 + 解码64('NzBjbG91ZGZsYXJlYXBpa2V5') + 时间戳434);
-    const 响应434 = await fetch(`${解码64('aHR0cHM6Ly9hcGkudW91aW4uY29tL2luZGV4LnBocC9pbmRleC9DbG91ZGZsYXJl')}?key=${请求密钥434}&time=${时间戳434}`, {
+    const { response: 响应434, bytes: 优选字节 } = await fetchBytes(`${解码64('aHR0cHM6Ly9hcGkudW91aW4uY29tL2luZGV4LnBocC9pbmRleC9DbG91ZGZsYXJl')}?key=${请求密钥434}&time=${时间戳434}`, {
       headers: {
         'User-Agent': 'Mozilla/5.0'
       }
     });
     if (!响应434.ok) return [];
-    const 数据434 = await 响应434.json();
+    const 数据434 = JSON.parse(new TextDecoder().decode(优选字节));
     const 分组集合434 = 数据434 && 数据434.data;
     if (!分组集合434) return [];
     const 结果列表433 = [];
@@ -1124,7 +1127,9 @@ async function 处理值代理连接(地址262, 端口261, 代理配置, 请求�
     if (选中方法 === 2) {
       if (!本地值260 || !密码259) throw new Error(错误_代理需要认证);
       const 编码器252 = new TextEncoder();
-      const 认证请求 = new Uint8Array([1, 本地值260.length, ...编码器252.encode(本地值260), 密码259.length, ...编码器252.encode(密码259)]);
+      const 用户字节 = 编码器252.encode(本地值260), 密码字节 = 编码器252.encode(密码259);
+      if (用户字节.length > 255 || 密码字节.length > 255) throw new Error(错误_代理认证失败);
+      const 认证请求 = new Uint8Array([1, 用户字节.length, ...用户字节, 密码字节.length, ...密码字节]);
       await 写入器255.write(认证请求);
       本地值253 = await 读满(2);
       if (本地值253[0] !== 1 || 本地值253[1] !== 0) throw new Error(错误_代理认证失败);
@@ -1133,6 +1138,7 @@ async function 处理值代理连接(地址262, 端口261, 代理配置, 请求�
     // 统一用域名型寻址，避免 VLESS / Trojan 不同的地址类型编号影响 SOCKS 握手。
     const 编码器251 = new TextEncoder();
     const 目标字节 = 编码器251.encode(规范化目标地址(地址262));
+    if (目标字节.length > 255) throw new Error(错误_代理连接失败);
     const 本地值250 = new Uint8Array([3, 目标字节.length, ...目标字节]);
     await 写入器255.write(new Uint8Array([5, 1, 0, ...本地值250, 端口261 >> 8, 端口261 & 255]));
     // 连接应答长度随绑定地址类型而变，先读固定的 4 字节头再按类型补齐
@@ -1193,7 +1199,7 @@ async function 处理值隧道连接(地址238值, 端口237值, 代理配置, �
   const 目标地址 = `${目标主机}:${端口237值}`;
   let 请求头 = `${文本_连接方法} ${目标地址}${文本_协议版本}${文本_换行}` + `${文本_主机头}${目标地址}${文本_换行}` + `${文本_用户代理头}${文本_换行}` + `${文本_代理保持}${文本_换行}`;
   if (隧道用户) {
-    请求头 += `${文本_代理认证头}${btoa(`${隧道用户}:${隧道密码 || ''}`)}${文本_换行}`;
+    请求头 += `${文本_代理认证头}${btoa(String.fromCharCode(...new TextEncoder().encode(`${隧道用户}:${隧道密码 || ''}`)))}${文本_换行}`;
   }
   请求头 += 文本_换行;
   const 写入器 = 套接字.writable.getWriter();
@@ -1644,16 +1650,11 @@ async function 获取优选接口(网址列表, 默认端口 = '443', 超时 = 3
   if (!网址列表?.length) return [];
   const 结果列表 = new Set();
   await Promise.allSettled(网址列表.map(async 网址 => {
-    const 控制器 = new AbortController();
-    const 超时标识 = setTimeout(() => 控制器.abort(), 超时);
     try {
-      const 响应 = await fetch(网址, {
-        signal: 控制器.signal
-      });
+      const { response: 响应, bytes: 缓冲 } = await fetchBytes(网址, {}, { timeout: 超时 });
       if (!响应.ok) return;
       let 文本 = '';
       try {
-        const 缓冲 = await 响应.arrayBuffer();
         const 内容类型 = (响应.headers.get('content-type') || '').toLowerCase();
         const 字符集 = 内容类型.match(/charset=([^\s;]+)/i)?.[1]?.toLowerCase() || '';
         let 解码器列表 = ['utf-8', 'gb2312'];
@@ -1676,7 +1677,7 @@ async function 获取优选接口(网址列表, 默认端口 = '443', 超时 = 3
           }
         }
         if (!解码成功) {
-          文本 = await 响应.text();
+          文本 = new TextDecoder().decode(缓冲);
         }
         if (!文本 || 文本.trim().length === 0) {
           return;
@@ -1723,7 +1724,6 @@ async function 获取优选接口(网址列表, 默认端口 = '443', 超时 = 3
         }
       }
     } catch {}
-    finally { clearTimeout(超时标识); }
   }));
   return Array.from(结果列表);
 }
