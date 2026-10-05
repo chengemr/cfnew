@@ -50,13 +50,18 @@ export function websocketRuntime() {
     readyState = 0;
     listeners = new Map();
     accept() { this.readyState = 1; }
-    addEventListener(type, listener) { this.listeners.set(type, listener); }
+    addEventListener(type, listener) {
+      if (!this.listeners.has(type)) this.listeners.set(type, new Set());
+      this.listeners.get(type).add(listener);
+    }
+    removeEventListener(type, listener) { this.listeners.get(type)?.delete(listener); }
+    dispatch(type, event) { for (const listener of this.listeners.get(type) || []) listener(event); }
     send() {}
-    receive(data) { this.listeners.get('message')?.({ data }); }
+    receive(data) { this.dispatch('message', { data }); }
     close() {
       if (this.readyState === 3) return;
       this.readyState = 3;
-      this.listeners.get('close')?.({});
+      this.dispatch('close', {});
     }
   }
   class Pair {
