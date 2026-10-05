@@ -3267,45 +3267,45 @@ async function 获取回退目标(回退地址, 地区, 地区匹配, 端口) {
   return { address: 备用.domain, port: 备用.port };
 }
 var worker_default = {
-  async fetch(请求735, 本地值734, 本地值733) {
+  async fetch(request, env, context) {
     try {
-      const 认证令牌 = getAuthenticationToken(本地值734);
+      const 认证令牌 = getAuthenticationToken(env);
       if (!认证令牌) return Response.json({ error: "Configure U with a valid UUID before using this Worker." }, { status: 503 });
-      const 是否网页套接字 = 请求735.headers.get("Upgrade") === "websocket";
-      const 是否值732 = 请求735.method === "POST";
-      const 请求网址731 = new URL(请求735.url);
-      if (!(本地值734.C || 本地值734.c) && !是否网页套接字 && !是否值732 && 请求网址731.pathname !== "/") {
-        const 值值728 = 认证令牌;
-        const 值值727 = (本地值734.d || 本地值734.D || "").toLowerCase();
-        const 首次值 = 请求网址731.pathname.split("/").filter(Boolean)[0] || "";
-        const 清理值 = normalizePath(值值727);
-        const 请求路径 = 请求网址731.pathname.toLowerCase();
+      const 是否网页套接字 = request.headers.get("Upgrade") === "websocket";
+      const isPost = request.method === "POST";
+      const url = new URL(request.url);
+      if (!(env.C || env.c) && !是否网页套接字 && !isPost && url.pathname !== "/") {
+        const authToken = 认证令牌;
+        const customPath = (env.d || env.D || "").toLowerCase();
+        const 首次值 = url.pathname.split("/").filter(Boolean)[0] || "";
+        const 清理值 = normalizePath(customPath);
+        const 请求路径 = url.pathname.toLowerCase();
         const 自定义路径匹配 = 请求路径 === 清理值 || 请求路径.startsWith(清理值 + "/");
-        if (首次值 !== 值值728 && 清理值 && !自定义路径匹配) {
+        if (首次值 !== authToken && 清理值 && !自定义路径匹配) {
           return new Response("Not Found", {
             status: 404
           });
         }
       }
-      const store = getConfigStore(本地值734.C || 本地值734.c);
+      const store = getConfigStore(env.C || env.c);
       const stored = store ? await store.load() : {};
-      const settings = createSettings(本地值734, stored);
-      const 管理路由 = resolveManagementRoute(请求网址731.pathname, settings.自定义路径, settings.认证令牌);
-      if (管理路由 === "config") return await handleConfig(请求735, 本地值734, store, stored);
-      if (管理路由 === "preferred") return await handlePreferred(请求735, 本地值734, store, stored);
+      const settings = createSettings(env, stored);
+      const 管理路由 = resolveManagementRoute(url.pathname, settings.自定义路径, settings.认证令牌);
+      if (管理路由 === "config") return await handleConfig(request, env, store, stored);
+      if (管理路由 === "preferred") return await handlePreferred(request, env, store, stored);
       if (管理路由 === "invalid-api" && !是否网页套接字) return Response.json({ error: "Not Found" }, { status: 404 });
-      if (请求735.method === "POST" && settings.启用扩展传输) {
+      if (request.method === "POST" && settings.启用扩展传输) {
         const { 头: 叉填充头, 键: 叉填充键 } = getPaddingKeys(settings.认证令牌);
-        if (!validatePadding(请求735, 叉填充头, 叉填充键)) {
+        if (!validatePadding(request, 叉填充头, 叉填充键)) {
           return new Response("Bad Request", {
             status: 400
           });
         }
-        const 结果值684 = await 处理扩展超文本值(请求735, settings);
-        if (结果值684 instanceof Response) return 结果值684;
-        if (结果值684) {
-          本地值733.waitUntil(结果值684.closed);
-          const 响应头684 = {
+        const relay = await handleXHTTP(request, settings);
+        if (relay instanceof Response) return relay;
+        if (relay) {
+          context.waitUntil(relay.closed);
+          const responseHeaders = {
             "X-Accel-Buffering": "no",
             "Cache-Control": "no-store",
             Connection: "keep-alive",
@@ -3315,21 +3315,21 @@ var worker_default = {
           try {
             const 响应填充 = new URL("https://x.invalid/");
             响应填充.searchParams.set(叉填充键, generatePadding(100 + Math.floor(Math.random() * 901)));
-            响应头684[叉填充头] = 响应填充.toString();
+            responseHeaders[叉填充头] = 响应填充.toString();
           } catch {
           }
-          return new Response(结果值684.readable, {
-            headers: 响应头684
+          return new Response(relay.readable, {
+            headers: responseHeaders
           });
         }
         return new Response("Internal Server Error", {
           status: 500
         });
       }
-      if (请求735.headers.get("Upgrade") === "websocket") {
-        return await 处理网页套接字请求(请求735, settings);
+      if (request.headers.get("Upgrade") === "websocket") {
+        return await handleWebSocket(request, settings);
       }
-      if (请求735.method === "GET") {
+      if (request.method === "GET") {
         if (管理路由 === "region") {
           const 地区信息 = settings.手动工作器地区 ? { region: settings.手动工作器地区, detectionMethod: "手动指定地区", manualRegion: settings.手动工作器地区 } : settings.回退地址 ? { region: "CUSTOM", detectionMethod: decodeBase64Text("6Ieq5a6a5LmJUHJveHlJUOaooeW8jw=="), ci: settings.回退地址 } : { region: "CF", detectionMethod: decodeBase64Text("5a6Y5pa555u06L+e") };
           return Response.json({ ...地区信息, timestamp: (/* @__PURE__ */ new Date()).toISOString() });
@@ -3337,41 +3337,41 @@ var worker_default = {
         if (管理路由 === "test") {
           return Response.json({ detectedRegion: "CF", message: "API测试完成", timestamp: (/* @__PURE__ */ new Date()).toISOString() });
         }
-        if (请求网址731.pathname === "/") {
+        if (url.pathname === "/") {
           const 自定义值 = settings.config.homepage;
           if (typeof 自定义值 === "string" && 自定义值.trim()) {
             try {
               const { response: 值响应, bytes: 首页字节 } = await fetchBytes(自定义值.trim(), {
                 method: "GET",
                 headers: {
-                  "User-Agent": 请求735.headers.get("User-Agent") || "Mozilla/5.0",
-                  "Accept": 请求735.headers.get("Accept") || "*/*",
-                  "Accept-Language": 请求735.headers.get("Accept-Language") || "en-US,en;q=0.9"
+                  "User-Agent": request.headers.get("User-Agent") || "Mozilla/5.0",
+                  "Accept": request.headers.get("Accept") || "*/*",
+                  "Accept-Language": request.headers.get("Accept-Language") || "en-US,en;q=0.9"
                 },
                 redirect: "follow"
               }, { timeout: 5e3, maxBytes: 2 * 1024 * 1024 });
               if (值响应.ok) {
-                const 内容类型672 = 值响应.headers.get("Content-Type") || "text/html; charset=utf-8";
-                const 内容671 = new TextDecoder().decode(首页字节);
-                return new Response(内容671, {
+                const contentType = 值响应.headers.get("Content-Type") || "text/html; charset=utf-8";
+                const content = new TextDecoder().decode(首页字节);
+                return new Response(content, {
                   status: 值响应.status,
                   headers: {
-                    "Content-Type": 内容类型672,
+                    "Content-Type": contentType,
                     "Cache-Control": "no-cache, no-store, must-revalidate"
                   }
                 });
               }
-            } catch (错误670) {
-              console.error("获取自定义首页失败:", 错误670);
+            } catch (error) {
+              console.error("获取自定义首页失败:", error);
             }
           }
-          return renderLanding(请求735, settings.自定义路径);
+          return renderLanding(request, settings.自定义路径);
         }
-        if (管理路由 === "page") return renderDashboard(请求735, settings.认证令牌, {
+        if (管理路由 === "page") return renderDashboard(request, settings.认证令牌, {
           config: settings.config,
           kvEnabled: Boolean(store)
         });
-        if (管理路由 === "subscription") return await 处理订阅请求(settings, 请求735, settings.认证令牌, 请求网址731);
+        if (管理路由 === "subscription") return await 处理订阅请求(settings, request, settings.认证令牌, url);
         if (管理路由 === "denied") {
           return Response.json({ error: "访问被拒绝", message: settings.自定义路径 ? "当前 Worker 已启用自定义路径模式，UUID 访问已禁用" : "UUID错误" }, { status: 403 });
         }
@@ -3384,19 +3384,19 @@ var worker_default = {
           "Content-Type": "application/json"
         }
       });
-    } catch (错误655) {
-      return new Response(错误655.toString(), {
+    } catch (error) {
+      return new Response(error.toString(), {
         status: 500
       });
     }
   }
 };
-async function 处理订阅请求(settings, 请求507, 用户506, 网址505 = null) {
-  if (!网址505) 网址505 = new URL(请求507.url);
+async function 处理订阅请求(settings, request, token, url = null) {
+  if (!url) url = new URL(request.url);
   const 最终链接列表 = [];
-  const 工作器域名504 = 网址505.hostname;
-  const 目标503 = (网址505.searchParams.get("target") || "base64").toLowerCase();
-  const 家宽目标 = ["vg", "jk", "jiakuan"].includes(目标503);
+  const workerHost = url.hostname;
+  const target = (url.searchParams.get("target") || "base64").toLowerCase();
+  const 家宽目标 = ["vg", "jk", "jiakuan"].includes(target);
   if (家宽目标 && !settings.启用家宽链式) {
     return new Response("家宽链式没开。去配置管理勾上「开启家宽链式」，或者加环境变量 jk=yes。", {
       status: 403,
@@ -3421,7 +3421,7 @@ async function 处理订阅请求(settings, 请求507, 用户506, 网址505 = nu
     "loon",
     "singbox",
     "sing-box"
-  ].includes(目标503);
+  ].includes(target);
   const 不兼容扩展传输 = 转换目标 && settings.启用扩展传输 && !settings.启用明文;
   if (不兼容扩展传输 && !settings.启用木马) {
     return new Response("当前订阅格式不支持原生 XHTTP，且未启用兼容的 WebSocket 协议。请使用 V2Ray/base64 原生订阅，或启用 VLESS WebSocket（ev=yes）/Trojan WebSocket（et=yes）。", {
@@ -3430,10 +3430,10 @@ async function 处理订阅请求(settings, 请求507, 用户506, 网址505 = nu
     });
   }
   const 节点设置 = 不兼容扩展传输 ? { ...settings, 启用扩展传输: false } : settings;
-  const 别名命名器502 = createNodeNamer();
+  const nodeNamer = createNodeNamer();
   const 客户端配置 = { dns: settings.自定义域名系统, echDomain: settings.自定义加密客户端问候域名 };
   function 添加节点(列表, 显式端口 = false) {
-    最终链接列表.push(...generateNodeLinks(节点设置, 列表, 用户506, 工作器域名504, 别名命名器502, 显式端口));
+    最终链接列表.push(...generateNodeLinks(节点设置, 列表, token, workerHost, nodeNamer, 显式端口));
   }
   async function 添加备用节点() {
     const 备用 = await 获取值备用地址(settings.当前工作器地区, settings.启用地区匹配);
@@ -3441,7 +3441,7 @@ async function 处理订阅请求(settings, 请求507, 用户506, 网址505 = nu
   }
   if (settings.启用原生地址) {
     try {
-      添加节点([{ ip: 工作器域名504, isp: "原生地址" }]);
+      添加节点([{ ip: workerHost, isp: "原生地址" }]);
     } catch (错误) {
       if (settings.当前工作器地区 === "CUSTOM") throw 错误;
       await 添加备用节点();
@@ -3454,10 +3454,10 @@ async function 处理订阅请求(settings, 请求507, 用户506, 网址505 = nu
         添加节点(settings.自定义优选地址列表);
       }
       if (settings.自定义优选域名列表.length > 0 && settings.启用优选域名) {
-        const 自定义域名列表 = settings.自定义优选域名列表.map((丁值492) => ({
-          ip: 丁值492.domain,
-          port: 丁值492.port,
-          isp: 丁值492.name || 丁值492.domain
+        const 自定义域名列表 = settings.自定义优选域名列表.map((node) => ({
+          ip: node.domain,
+          port: node.port,
+          isp: node.name || node.domain
         }));
         添加节点(自定义域名列表);
       }
@@ -3469,9 +3469,9 @@ async function 处理订阅请求(settings, 请求507, 用户506, 网址505 = nu
       if (settings.启用优选地址) {
         if (!settings.优选地址源) {
           try {
-            const 值地址列表490 = await 获取值地址列表(settings);
-            if (值地址列表490.length > 0) {
-              添加节点(值地址列表490);
+            const addresses = await 获取值地址列表(settings);
+            if (addresses.length > 0) {
+              添加节点(addresses);
             }
           } catch {
             await 添加备用节点();
@@ -3492,20 +3492,20 @@ async function 处理订阅请求(settings, 请求507, 用户506, 网址505 = nu
   }
   if (最终链接列表.length === 0) {
     const 错误备注 = "所有节点获取失败";
-    const 协议484 = "vless";
-    const 错误链接 = `${协议484}://00000000-0000-0000-0000-000000000000@127.0.0.1:80?encryption=none&security=none&type=ws&host=error.com&path=%2F#${encodeURIComponent(错误备注)}`;
+    const protocol = "vless";
+    const 错误链接 = `${protocol}://00000000-0000-0000-0000-000000000000@127.0.0.1:80?encryption=none&security=none&type=ws&host=error.com&path=%2F#${encodeURIComponent(错误备注)}`;
     最终链接列表.push(错误链接);
   }
   let 订阅内容;
-  let 内容类型483 = "text/plain; charset=utf-8";
-  switch (目标503) {
+  let contentType = "text/plain; charset=utf-8";
+  switch (target) {
     case "clash":
     case "clashr":
     case "stash":
     case "meta":
     case "clashmeta":
       订阅内容 = generateClash(最终链接列表, 客户端配置);
-      内容类型483 = "text/yaml; charset=utf-8";
+      contentType = "text/yaml; charset=utf-8";
       break;
     case "vg":
     case "jk":
@@ -3518,7 +3518,7 @@ async function 处理订阅请求(settings, 请求507, 用户506, 网址505 = nu
           headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" }
         });
       }
-      内容类型483 = "text/yaml; charset=utf-8";
+      contentType = "text/yaml; charset=utf-8";
       break;
     case "surge":
     case "surge2":
@@ -3536,13 +3536,13 @@ async function 处理订阅请求(settings, 请求507, 用户506, 网址505 = nu
     case "singbox":
     case "sing-box":
       订阅内容 = generateSingBox(最终链接列表, 客户端配置);
-      内容类型483 = "application/json; charset=utf-8";
+      contentType = "application/json; charset=utf-8";
       break;
     default:
       订阅内容 = btoa(最终链接列表.join("\n"));
   }
   const 响应头部列表 = {
-    "Content-Type": 内容类型483,
+    "Content-Type": contentType,
     "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"
   };
   if (settings.启用加密客户端问候) {
@@ -3553,9 +3553,9 @@ async function 处理订阅请求(settings, 请求507, 用户506, 网址505 = nu
     headers: 响应头部列表
   });
 }
-async function 计算值摘要(文本434) {
-  const 缓冲区434 = await crypto.subtle.digest("MD5", new TextEncoder().encode(文本434));
-  return Array.from(new Uint8Array(缓冲区434)).map((字节434) => 字节434.toString(16).padStart(2, "0")).join("");
+async function 计算值摘要(text) {
+  const digest = await crypto.subtle.digest("MD5", new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 async function 获取值地址列表(settings) {
   const 分组线路映射 = {
@@ -3565,95 +3565,95 @@ async function 获取值地址列表(settings) {
     bgp: "多线",
     ipv6: "IPv6"
   };
-  const 值4已启用 = settings.config.ipv4 !== "no";
-  const 值6已启用 = settings.config.ipv6 !== "no";
-  const 值值432 = settings.config.ispMobile !== "no";
-  const 值值431 = settings.config.ispUnicom !== "no";
-  const 值值430 = settings.config.ispTelecom !== "no";
+  const ipv4Enabled = settings.config.ipv4 !== "no";
+  const ipv6Enabled = settings.config.ipv6 !== "no";
+  const mobileEnabled = settings.config.ispMobile !== "no";
+  const unicomEnabled = settings.config.ispUnicom !== "no";
+  const telecomEnabled = settings.config.ispTelecom !== "no";
   try {
-    const 时间戳434 = String(Date.now());
-    const 内层摘要434 = await 计算值摘要(decodeBase64Text("RGRsVHh0TjBzVU91"));
-    const 请求密钥434 = await 计算值摘要(内层摘要434 + decodeBase64Text("NzBjbG91ZGZsYXJlYXBpa2V5") + 时间戳434);
-    const { response: 响应434, bytes: 优选字节 } = await fetchBytes(`${decodeBase64Text("aHR0cHM6Ly9hcGkudW91aW4uY29tL2luZGV4LnBocC9pbmRleC9DbG91ZGZsYXJl")}?key=${请求密钥434}&time=${时间戳434}`, {
+    const timestamp = String(Date.now());
+    const seedDigest = await 计算值摘要(decodeBase64Text("RGRsVHh0TjBzVU91"));
+    const requestKey = await 计算值摘要(seedDigest + decodeBase64Text("NzBjbG91ZGZsYXJlYXBpa2V5") + timestamp);
+    const { response, bytes: 优选字节 } = await fetchBytes(`${decodeBase64Text("aHR0cHM6Ly9hcGkudW91aW4uY29tL2luZGV4LnBocC9pbmRleC9DbG91ZGZsYXJl")}?key=${requestKey}&time=${timestamp}`, {
       headers: {
         "User-Agent": "Mozilla/5.0"
       }
     });
-    if (!响应434.ok) return [];
-    const 数据434 = JSON.parse(new TextDecoder().decode(优选字节));
-    const 分组集合434 = 数据434 && 数据434.data;
-    if (!分组集合434) return [];
-    const 结果列表433 = [];
-    for (const 分组名434 of Object.keys(分组线路映射)) {
-      const 是否值6434 = 分组名434 === "ipv6";
-      if (是否值6434 && !值6已启用) continue;
-      if (!是否值6434 && !值4已启用) continue;
-      const 线路名434 = 分组线路映射[分组名434];
-      if (线路名434 === "移动" && !值值432) continue;
-      if (线路名434 === "联通" && !值值431) continue;
-      if (线路名434 === "电信" && !值值430) continue;
-      const 分组434 = 分组集合434[分组名434];
-      const 条目列表434 = 分组434 && Array.isArray(分组434.info) ? 分组434.info : [];
-      for (const 条目434 of 条目列表434) {
-        const 地址434 = 规范化节点主机(条目434 && 条目434.ip);
-        if (!地址434) continue;
-        结果列表433.push({
-          isp: 线路名434,
-          ip: 地址434,
+    if (!response.ok) return [];
+    const data = JSON.parse(new TextDecoder().decode(优选字节));
+    const groups = data && data.data;
+    if (!groups) return [];
+    const nodes = [];
+    for (const groupName of Object.keys(分组线路映射)) {
+      const isIPv6 = groupName === "ipv6";
+      if (isIPv6 && !ipv6Enabled) continue;
+      if (!isIPv6 && !ipv4Enabled) continue;
+      const isp = 分组线路映射[groupName];
+      if (isp === "移动" && !mobileEnabled) continue;
+      if (isp === "联通" && !unicomEnabled) continue;
+      if (isp === "电信" && !telecomEnabled) continue;
+      const group = groups[groupName];
+      const items = group && Array.isArray(group.info) ? group.info : [];
+      for (const item of items) {
+        const address = 规范化节点主机(item && item.ip);
+        if (!address) continue;
+        nodes.push({
+          isp,
+          ip: address,
           colo: ""
         });
       }
     }
-    return 结果列表433;
+    return nodes;
   } catch {
   }
   return [];
 }
-async function 处理网页套接字请求(请求417, 配置快照) {
+async function handleWebSocket(request, 配置快照) {
   const { 认证令牌, 启用明文, 启用木马, 传输路径 } = 配置快照;
-  const 请求网址 = new URL(请求417.url);
-  const 请求回退416 = 请求网址.searchParams.get("p") || "";
-  const 请求地区415 = (请求网址.searchParams.get("wk") || "").toUpperCase();
+  const 请求网址 = new URL(request.url);
+  const queryFallback = 请求网址.searchParams.get("p") || "";
+  const queryRegion = (请求网址.searchParams.get("wk") || "").toUpperCase();
   const 请求值字符串 = 请求网址.searchParams.get("rm") || "";
-  const 请求值414 = 请求值字符串 ? 请求值字符串.toLowerCase() !== "no" : null;
+  const queryRegionMatch = 请求值字符串 ? 请求值字符串.toLowerCase() !== "no" : null;
   const 请求代理字符串 = 请求网址.searchParams.get("s") || "";
-  let 请求代理配置413 = null;
+  let queryProxy = null;
   if (请求代理字符串) {
     try {
-      请求代理配置413 = parseProxy(请求代理字符串);
+      queryProxy = parseProxy(请求代理字符串);
     } catch {
     }
   }
   const 网页套接字值 = new WebSocketPair();
-  const [客户端值, 值值410] = Object.values(网页套接字值);
-  值值410.accept();
-  值值410.binaryType = "arraybuffer";
-  let 远程连接值409 = {
+  const [客户端值, websocket] = Object.values(网页套接字值);
+  websocket.accept();
+  websocket.binaryType = "arraybuffer";
+  let remote = {
     socket: null,
     writer: null,
     drainUpload: null
   };
   let 是否域名系统值 = false;
   let 协议类型 = null;
-  let 值值408 = false;
+  let drainingUpload = false;
   let 传输值 = false;
-  const 值队列 = 创建块队列(传输上传包大小, 传输上传队列上限, 传输上传队列上限 >> 8);
-  const 请求值407 = 请求417.fetcher;
+  const 值队列 = createUploadQueue(传输上传包大小, 传输上传队列上限, 传输上传队列上限 >> 8);
+  const fetcher = request.fetcher;
   const 连接取消 = new AbortController();
   const 出站配置 = {
     ...配置快照,
-    已解析代理5配置: 请求代理配置413 || 配置快照.已解析代理5配置,
-    是否代理已启用: !!请求代理配置413 || 配置快照.是否代理已启用,
-    回退地址: 请求回退416 || 配置快照.回退地址,
-    当前工作器地区: 请求地区415 || 配置快照.当前工作器地区,
-    启用地区匹配: 请求值414 ?? 配置快照.启用地区匹配
+    已解析代理5配置: queryProxy || 配置快照.已解析代理5配置,
+    是否代理已启用: !!queryProxy || 配置快照.是否代理已启用,
+    回退地址: queryFallback || 配置快照.回退地址,
+    当前工作器地区: queryRegion || 配置快照.当前工作器地区,
+    启用地区匹配: queryRegionMatch ?? 配置快照.启用地区匹配
   };
   function 处理值远程写入器() {
     try {
-      远程连接值409.writer?.releaseLock();
+      remote.writer?.releaseLock();
     } catch {
     }
-    远程连接值409.writer = null;
+    remote.writer = null;
   }
   function 关闭传输() {
     if (传输值) return;
@@ -3661,93 +3661,93 @@ async function 处理网页套接字请求(请求417, 配置快照) {
     连接取消.abort();
     值队列.clear();
     处理值远程写入器();
-    关闭套接字值(值值410);
+    closeWebSocket(websocket);
   }
-  值值410.addEventListener("close", 关闭传输);
-  值值410.addEventListener("error", 关闭传输);
-  function 处理队列值(块404) {
-    const 数据403 = 处理值值8数组(块404);
-    if (!数据403.byteLength) return true;
-    if (!值队列.sow(数据403)) {
+  websocket.addEventListener("close", 关闭传输);
+  websocket.addEventListener("error", 关闭传输);
+  function 处理队列值(chunk) {
+    const data = asBytes(chunk);
+    if (!data.byteLength) return true;
+    if (!值队列.sow(data)) {
       关闭传输();
       return false;
     }
-    远程连接值409.drainUpload();
+    remote.drainUpload();
     return true;
   }
-  async function 处理值值402() {
-    if (值值408 || 传输值 || !远程连接值409.writer) return;
-    值值408 = true;
+  async function drainUpload() {
+    if (drainingUpload || 传输值 || !remote.writer) return;
+    drainingUpload = true;
     try {
       for (; ; ) {
-        if (传输值 || !远程连接值409.writer) break;
-        const 数据401 = 值队列.bundle();
-        if (!数据401) break;
-        await 远程连接值409.writer.write(数据401);
+        if (传输值 || !remote.writer) break;
+        const data = 值队列.bundle();
+        if (!data) break;
+        await remote.writer.write(data);
       }
     } catch {
       关闭传输();
     } finally {
-      值值408 = false;
-      if (!值队列.empty && !传输值 && 远程连接值409.writer) queueMicrotask(处理值值402);
+      drainingUpload = false;
+      if (!值队列.empty && !传输值 && remote.writer) queueMicrotask(drainUpload);
     }
   }
-  远程连接值409.drainUpload = () => {
-    if (!值值408 && !值队列.empty && 远程连接值409.writer) queueMicrotask(处理值值402);
+  remote.drainUpload = () => {
+    if (!drainingUpload && !值队列.empty && remote.writer) queueMicrotask(drainUpload);
   };
-  const 值数据399 = 请求417.headers.get("sec-websocket-protocol") || "";
-  const 本地值398 = 制作值流(值值410, 值数据399);
-  本地值398.pipeTo(new WritableStream({
+  const earlyDataHeader = request.headers.get("sec-websocket-protocol") || "";
+  const inbound = webSocketReadable(websocket, earlyDataHeader);
+  inbound.pipeTo(new WritableStream({
     close() {
       关闭传输();
     },
     abort() {
       关闭传输();
     },
-    async write(块397) {
+    async write(chunk) {
       if (传输值) return;
-      const 数据396 = 处理值值8数组(块397);
-      if (是否域名系统值) return await 处理值用户数据报(数据396, 值值410, null, 请求值407, 出站配置, 连接取消.signal);
-      if (远程连接值409.socket && 远程连接值409.writer) {
-        if (!处理队列值(数据396)) throw new Error("upload queue overflow");
+      const data = asBytes(chunk);
+      if (是否域名系统值) return await forwardDNS(data, websocket, null, fetcher, 出站配置, 连接取消.signal);
+      if (remote.socket && remote.writer) {
+        if (!处理队列值(data)) throw new Error("upload queue overflow");
         return;
       }
       if (协议类型) {
-        if (!处理队列值(数据396)) throw new Error("upload queue overflow");
+        if (!处理队列值(data)) throw new Error("upload queue overflow");
         return;
       }
-      if (启用明文 && 数据396.byteLength >= 24) {
-        const 轻量协议结果 = 解析网页套接字值头部(数据396, 认证令牌);
+      if (启用明文 && data.byteLength >= 24) {
+        const 轻量协议结果 = parseVlessHeader(data, 认证令牌);
         if (!轻量协议结果.hasError) {
           协议类型 = "vless";
           const {
-            port: 端口394,
-            hostname: 主机名393,
+            port,
+            hostname,
             rawIndex: 原始索引,
-            version: 本地值392,
-            isUDP: 是否用户数据报391
+            version,
+            isUDP
           } = 轻量协议结果;
-          if (是否用户数据报391) {
-            if (端口394 === 53) 是否域名系统值 = true;
+          if (isUDP) {
+            if (port === 53) 是否域名系统值 = true;
             else throw new Error(错误_仅支持域名系统用户数据报);
           }
-          const 值头部390 = new Uint8Array([本地值392[0], 0]);
-          const 原始数据389 = 数据396.subarray(原始索引);
-          if (是否域名系统值) return 处理值用户数据报(原始数据389, 值值410, 值头部390, 请求值407, 出站配置, 连接取消.signal);
-          await 连接网页套接字TCP(主机名393, 端口394, 原始数据389, 值值410, 值头部390, 远程连接值409, 请求值407, 出站配置, 连接取消.signal);
+          const responseHeader = new Uint8Array([version[0], 0]);
+          const payload = data.subarray(原始索引);
+          if (是否域名系统值) return forwardDNS(payload, websocket, responseHeader, fetcher, 出站配置, 连接取消.signal);
+          await connectWebSocketTCP(hostname, port, payload, websocket, responseHeader, remote, fetcher, 出站配置, 连接取消.signal);
           return;
         }
       }
-      if (启用木马 && 数据396.byteLength >= 56) {
-        const 值结果 = await 解析木马头部(数据396, 认证令牌, 传输路径);
+      if (启用木马 && data.byteLength >= 56) {
+        const 值结果 = await parseTrojanHeader(data, 认证令牌, 传输路径);
         if (!值结果.hasError) {
           协议类型 = "trojan";
           const {
-            port: 端口387,
-            hostname: 主机名386,
+            port,
+            hostname,
             rawClientData: 原始客户端数据
           } = 值结果;
-          await 连接网页套接字TCP(主机名386, 端口387, 原始客户端数据, 值值410, null, 远程连接值409, 请求值407, 出站配置, 连接取消.signal);
+          await connectWebSocketTCP(hostname, port, 原始客户端数据, websocket, null, remote, fetcher, 出站配置, 连接取消.signal);
           return;
         }
       }
@@ -3759,49 +3759,49 @@ async function 处理网页套接字请求(请求417, 配置快照) {
     webSocket: 客户端值
   });
 }
-async function 连接网页套接字TCP(主机, 端口数字, 原始数据, 网页套接字382, 值头部381, 远程连接值, 请求值379, 配置快照, signal) {
+async function connectWebSocketTCP(主机, 端口数字, 原始数据, websocket, responseHeader, 远程连接值, fetcher, 配置快照, signal) {
   const attempts = outboundAttempts(配置快照, 主机, 端口数字, () => 获取回退目标(
     配置快照.回退地址,
     配置快照.当前工作器地区,
     配置快照.启用地区匹配,
     端口数字
   ));
-  const 值数据378 = 处理值值8数组(原始数据);
-  async function 连接值发送(地址377, 端口376, 值代理 = false) {
-    const 远程值375 = await 建立出站连接(地址377, 端口376, 值数据378, 请求值379, 配置快照.已解析代理5配置, 值代理, signal);
-    const 写入器374 = 远程值375.writable.getWriter();
+  const payload = asBytes(原始数据);
+  async function 连接值发送(address, port, 值代理 = false) {
+    const socket = await dialOutbound(address, port, payload, fetcher, 配置快照.已解析代理5配置, 值代理, signal);
+    const writer = socket.writable.getWriter();
     return {
-      remoteSock: 远程值375,
-      writer: 写入器374
+      remoteSock: socket,
+      writer
     };
   }
-  function 处理值值当前(远程值373, 写入器372) {
-    if (远程连接值.socket !== 远程值373) return;
+  function 处理值值当前(socket, writer) {
+    if (远程连接值.socket !== socket) return;
     try {
-      写入器372?.releaseLock();
+      writer?.releaseLock();
     } catch {
     }
     远程连接值.socket = null;
     远程连接值.writer = null;
   }
-  function 处理值远程(远程值370, 写入器369, 重试值368) {
+  function 处理值远程(socket, writer, retry) {
     try {
-      if (远程连接值.writer && 远程连接值.writer !== 写入器369) {
+      if (远程连接值.writer && 远程连接值.writer !== writer) {
         远程连接值.writer.releaseLock();
       }
     } catch {
     }
-    远程连接值.socket = 远程值370;
-    远程连接值.writer = 写入器369;
+    远程连接值.socket = socket;
+    远程连接值.writer = writer;
     远程连接值.drainUpload?.();
-    远程值370.closed.catch(() => {
+    socket.closed.catch(() => {
     }).finally(() => {
-      if (远程连接值.socket === 远程值370) 关闭套接字值(网页套接字382);
+      if (远程连接值.socket === socket) closeWebSocket(websocket);
     });
-    转发远程数据到WS(远程值370, 网页套接字382, 值头部381, 重试值368).finally(() => {
-      if (远程连接值.socket === 远程值370) {
+    relayToWebSocket(socket, websocket, responseHeader, retry).finally(() => {
+      if (远程连接值.socket === socket) {
         try {
-          写入器369.releaseLock();
+          writer.releaseLock();
         } catch {
         }
         远程连接值.writer = null;
@@ -3812,7 +3812,7 @@ async function 连接网页套接字TCP(主机, 端口数字, 原始数据, 网�
     while (!signal.aborted) {
       const { value: attempt, done } = await attempts.next();
       if (done) {
-        关闭套接字值(网页套接字382);
+        closeWebSocket(websocket);
         return;
       }
       try {
@@ -3828,120 +3828,120 @@ async function 连接网页套接字TCP(主机, 端口数字, 原始数据, 网�
   }
   await connectNext();
 }
-function 处理值值8数组(块356) {
-  if (块356 instanceof Uint8Array) return 块356;
-  if (块356 instanceof ArrayBuffer) return new Uint8Array(块356);
-  if (ArrayBuffer.isView(块356)) return new Uint8Array(块356.buffer, 块356.byteOffset, 块356.byteLength);
-  return new Uint8Array(块356);
+function asBytes(chunk) {
+  if (chunk instanceof Uint8Array) return chunk;
+  if (chunk instanceof ArrayBuffer) return new Uint8Array(chunk);
+  if (ArrayBuffer.isView(chunk)) return new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength);
+  return new Uint8Array(chunk);
 }
-function 拼接值8数组(头部355, 主体354) {
-  const 头值353 = 处理值值8数组(头部355);
-  const 乙值352 = 处理值值8数组(主体354);
-  const 输出351 = new Uint8Array(头值353.byteLength + 乙值352.byteLength);
-  输出351.set(头值353);
-  输出351.set(乙值352, 头值353.byteLength);
-  return 输出351;
+function concatBytes(first, second) {
+  const firstBytes = asBytes(first);
+  const secondBytes = asBytes(second);
+  const result = new Uint8Array(firstBytes.byteLength + secondBytes.byteLength);
+  result.set(firstBytes);
+  result.set(secondBytes, firstBytes.byteLength);
+  return result;
 }
-function 创建块队列(本地值350, 值值349 = 本地值350, 项目列表上限 = Math.max(1, 值值349 >> 8)) {
+function createUploadQueue(chunkSize, maxBytes = chunkSize, 项目列表上限 = Math.max(1, maxBytes >> 8)) {
   let 队列 = [];
-  let 头部348 = 0;
-  let 值字节347 = 0;
-  let 值缓冲346 = null;
-  function 处理本地值345() {
-    if (头部348 > 32 && 头部348 * 2 >= 队列.length) {
-      队列 = 队列.slice(头部348);
-      头部348 = 0;
+  let head = 0;
+  let queuedBytes = 0;
+  let buffer = null;
+  function compact() {
+    if (head > 32 && head * 2 >= 队列.length) {
+      队列 = 队列.slice(head);
+      head = 0;
     }
   }
-  function 处理本地值344() {
-    if (头部348 >= 队列.length) return null;
-    const 数据343 = 队列[头部348];
-    队列[头部348++] = void 0;
-    值字节347 -= 数据343.byteLength;
-    处理本地值345();
-    return 数据343;
+  function shift() {
+    if (head >= 队列.length) return null;
+    const data = 队列[head];
+    队列[head++] = void 0;
+    queuedBytes -= data.byteLength;
+    compact();
+    return data;
   }
   return {
     get empty() {
-      return 头部348 >= 队列.length;
+      return head >= 队列.length;
     },
     clear() {
       队列 = [];
-      头部348 = 0;
-      值字节347 = 0;
+      head = 0;
+      queuedBytes = 0;
     },
-    sow(数据342) {
-      const 数量值 = 数据342?.byteLength || 0;
+    sow(data) {
+      const 数量值 = data?.byteLength || 0;
       if (!数量值) return true;
-      if (值字节347 + 数量值 > 值值349 || 队列.length - 头部348 >= 项目列表上限) return false;
-      队列.push(数据342);
-      值字节347 += 数量值;
+      if (queuedBytes + 数量值 > maxBytes || 队列.length - head >= 项目列表上限) return false;
+      队列.push(data);
+      queuedBytes += 数量值;
       return true;
     },
     bundle() {
-      const 数据341 = 处理本地值344();
-      if (!数据341 || 头部348 >= 队列.length || 数据341.byteLength >= 本地值350) return 数据341;
-      let 本地值340 = 数据341.byteLength;
-      let 结束 = 头部348;
+      const firstChunk = shift();
+      if (!firstChunk || head >= 队列.length || firstChunk.byteLength >= chunkSize) return firstChunk;
+      let totalBytes = firstChunk.byteLength;
+      let 结束 = head;
       while (结束 < 队列.length) {
-        const 本地值339 = 队列[结束];
-        const 值值338 = 本地值340 + 本地值339.byteLength;
-        if (值值338 > 本地值350) break;
-        本地值340 = 值值338;
+        const nextChunk = 队列[结束];
+        const combinedBytes = totalBytes + nextChunk.byteLength;
+        if (combinedBytes > chunkSize) break;
+        totalBytes = combinedBytes;
         结束++;
       }
-      if (结束 === 头部348) return 数据341;
-      const 输出 = 值缓冲346 ||= new Uint8Array(本地值350);
-      输出.set(数据341);
-      let 偏移337 = 数据341.byteLength;
-      while (头部348 < 结束) {
-        const 本地值336 = 队列[头部348];
-        队列[头部348++] = void 0;
-        值字节347 -= 本地值336.byteLength;
-        输出.set(本地值336, 偏移337);
-        偏移337 += 本地值336.byteLength;
+      if (结束 === head) return firstChunk;
+      const 输出 = buffer ||= new Uint8Array(chunkSize);
+      输出.set(firstChunk);
+      let offset = firstChunk.byteLength;
+      while (head < 结束) {
+        const chunk = 队列[head];
+        队列[head++] = void 0;
+        queuedBytes -= chunk.byteLength;
+        输出.set(chunk, offset);
+        offset += chunk.byteLength;
       }
-      处理本地值345();
-      return 输出.subarray(0, 本地值340);
+      compact();
+      return 输出.subarray(0, totalBytes);
     }
   };
 }
-function 创建WS下行聚合器(网页套接字335) {
-  const 本地值334 = 传输下载包大小;
+function createDownloadBatcher(websocket) {
+  const bufferSize2 = 传输下载包大小;
   const 尾部 = 传输下载尾部;
-  const 值值333 = Math.max(4096, 尾部 << 3);
-  let 本地值332 = new Uint8Array(本地值334);
+  const minBatchSize = Math.max(4096, 尾部 << 3);
+  let buffer = new Uint8Array(bufferSize2);
   let 值字节 = 0;
   let 计时器 = 0;
-  let 值值331 = false;
-  let 本地值330 = 0;
+  let scheduled = false;
+  let writeVersion = 0;
   let 值键 = 0;
-  let 值值329 = 0;
+  let deferrals = 0;
   function 刷新() {
     if (计时器) clearTimeout(计时器);
     计时器 = 0;
-    值值331 = false;
+    scheduled = false;
     if (!值字节) return;
-    if (网页套接字335.readyState === 1) 网页套接字335.send(本地值332.subarray(0, 值字节).slice());
-    本地值332 = new Uint8Array(本地值334);
+    if (websocket.readyState === 1) websocket.send(buffer.subarray(0, 值字节).slice());
+    buffer = new Uint8Array(bufferSize2);
     值字节 = 0;
-    值值329 = 0;
+    deferrals = 0;
   }
   function 处理本地值() {
-    if (计时器 || 值值331) return;
-    值值331 = true;
-    值键 = 本地值330;
+    if (计时器 || scheduled) return;
+    scheduled = true;
+    值键 = writeVersion;
     queueMicrotask(() => {
-      值值331 = false;
+      scheduled = false;
       if (!值字节 || 计时器) return;
-      if (本地值334 - 值字节 < 尾部) return 刷新();
+      if (bufferSize2 - 值字节 < 尾部) return 刷新();
       计时器 = setTimeout(() => {
         计时器 = 0;
         if (!值字节) return;
-        if (本地值334 - 值字节 < 尾部) return 刷新();
-        if (值值329 < 2 && (本地值330 !== 值键 || 值字节 < 值值333)) {
-          值值329++;
-          值键 = 本地值330;
+        if (bufferSize2 - 值字节 < 尾部) return 刷新();
+        if (deferrals < 2 && (writeVersion !== 值键 || 值字节 < minBatchSize)) {
+          deferrals++;
+          值键 = writeVersion;
           return 处理本地值();
         }
         刷新();
@@ -3949,55 +3949,55 @@ function 创建WS下行聚合器(网页套接字335) {
     });
   }
   return {
-    send(块328) {
-      const 数据327 = 处理值值8数组(块328);
-      let 偏移326 = 0;
-      const 本地值325 = 数据327.byteLength;
-      if (!本地值325) return;
-      while (偏移326 < 本地值325) {
-        if (!值字节 && 本地值325 - 偏移326 >= 本地值334) {
-          const 大小324 = Math.min(本地值334, 本地值325 - 偏移326);
-          if (网页套接字335.readyState === 1) 网页套接字335.send(偏移326 || 大小324 !== 本地值325 ? 数据327.subarray(偏移326, 偏移326 + 大小324) : 数据327);
-          偏移326 += 大小324;
+    send(chunk) {
+      const data = asBytes(chunk);
+      let offset = 0;
+      const length = data.byteLength;
+      if (!length) return;
+      while (offset < length) {
+        if (!值字节 && length - offset >= bufferSize2) {
+          const sendSize = Math.min(bufferSize2, length - offset);
+          if (websocket.readyState === 1) websocket.send(offset || sendSize !== length ? data.subarray(offset, offset + sendSize) : data);
+          offset += sendSize;
           continue;
         }
-        const 大小323 = Math.min(本地值334 - 值字节, 本地值325 - 偏移326);
-        本地值332.set(数据327.subarray(偏移326, 偏移326 + 大小323), 值字节);
-        值字节 += 大小323;
-        偏移326 += 大小323;
-        本地值330++;
-        if (值字节 === 本地值334 || 本地值334 - 值字节 < 尾部) 刷新();
+        const copySize = Math.min(bufferSize2 - 值字节, length - offset);
+        buffer.set(data.subarray(offset, offset + copySize), 值字节);
+        值字节 += copySize;
+        offset += copySize;
+        writeVersion++;
+        if (值字节 === bufferSize2 || bufferSize2 - 值字节 < 尾部) 刷新();
         else 处理本地值();
       }
     },
     flush: 刷新
   };
 }
-function 处理打开值套接字(地址322, 端口321, 请求值320, open) {
+function openSocket(address, port, fetcher, open) {
   const 目标 = {
-    hostname: 地址322,
-    port: 端口321
+    hostname: address,
+    port
   };
-  return open(() => 请求值320 && typeof 请求值320.connect === "function" ? 请求值320.connect(目标) : 连接(目标));
+  return open(() => fetcher && typeof fetcher.connect === "function" ? fetcher.connect(目标) : 连接(目标));
 }
-async function 处理打开值套接字值(地址319, 端口318, 请求值317, open, close) {
-  let 套接字316;
+async function openSocketWithFallback(address, port, fetcher, open, close) {
+  let socket;
   try {
-    套接字316 = 处理打开值套接字(地址319, 端口318, 请求值317, open);
-    if (套接字316?.opened) await 套接字316.opened;
-    return 套接字316;
-  } catch (错误315) {
-    if (套接字316) close(套接字316);
-    if (!请求值317) throw 错误315;
-    const 套接字314 = open(() => 连接({
-      hostname: 地址319,
-      port: 端口318
+    socket = openSocket(address, port, fetcher, open);
+    if (socket?.opened) await socket.opened;
+    return socket;
+  } catch (error) {
+    if (socket) close(socket);
+    if (!fetcher) throw error;
+    const fallbackSocket = open(() => 连接({
+      hostname: address,
+      port
     }));
-    if (套接字314?.opened) await 套接字314.opened;
-    return 套接字314;
+    if (fallbackSocket?.opened) await fallbackSocket.opened;
+    return fallbackSocket;
   }
 }
-async function 连接值套接字(地址313, 端口312, 请求值311, 竞速数量, open, close) {
+async function raceSockets(address, port, fetcher, 竞速数量, open, close) {
   const 数量 = Math.max(1, 竞速数量 | 0);
   const 待连接 = /* @__PURE__ */ new Set();
   let 已选定 = false;
@@ -4007,22 +4007,22 @@ async function 连接值套接字(地址313, 端口312, 请求值311, 竞速数�
     待连接.add(socket);
     return socket;
   };
-  const 本地值310 = Array.from({
+  const attempts = Array.from({
     length: 数量
-  }, () => 处理打开值套接字值(地址313, 端口312, 请求值311, 跟踪打开, close));
-  const 本地值309 = await Promise.any(本地值310);
+  }, () => openSocketWithFallback(address, port, fetcher, 跟踪打开, close));
+  const winner = await Promise.any(attempts);
   已选定 = true;
-  for (const socket of 待连接) if (socket !== 本地值309) close(socket);
-  本地值310.forEach((promise) => promise.then((socket) => {
-    if (socket !== 本地值309) close(socket);
+  for (const socket of 待连接) if (socket !== winner) close(socket);
+  attempts.forEach((promise) => promise.then((socket) => {
+    if (socket !== winner) close(socket);
   }, () => {
   }));
-  return 本地值309;
+  return winner;
 }
-function 建立出站连接(address, port, data, fetcher, proxy, viaProxy, signal, races = 传输连接竞速数) {
+function dialOutbound(address, port, data, fetcher, proxy, viaProxy, signal, races = 传输连接竞速数) {
   return withConnectionDeadline(async (open, close) => {
-    if (viaProxy) return 处理值代理连接(address, port, proxy, fetcher, data, open);
-    const socket = await 连接值套接字(address, port, fetcher, races, open, close);
+    if (viaProxy) return connectSOCKS(address, port, proxy, fetcher, data, open);
+    const socket = await raceSockets(address, port, fetcher, races, open, close);
     if (data?.byteLength) {
       const writer = socket.writable.getWriter();
       try {
@@ -4034,111 +4034,111 @@ function 建立出站连接(address, port, data, fetcher, proxy, viaProxy, signa
     return socket;
   }, signal);
 }
-function 获取唯一标识字节(令牌305) {
-  if (唯一标识字节缓存.has(令牌305)) return 唯一标识字节缓存.get(令牌305);
-  const 十六进制 = String(令牌305 || "").replace(/-/g, "");
+function getUUIDBytes(token) {
+  if (唯一标识字节缓存.has(token)) return 唯一标识字节缓存.get(token);
+  const 十六进制 = String(token || "").replace(/-/g, "");
   if (十六进制.length !== 32) return null;
-  const 字节304 = new Uint8Array(16);
-  for (let 索引值303 = 0; 索引值303 < 16; 索引值303++) {
-    const 值302 = Number.parseInt(十六进制.slice(索引值303 * 2, 索引值303 * 2 + 2), 16);
-    if (Number.isNaN(值302)) return null;
-    字节304[索引值303] = 值302;
+  const bytes = new Uint8Array(16);
+  for (let index = 0; index < 16; index++) {
+    const byte = Number.parseInt(十六进制.slice(index * 2, index * 2 + 2), 16);
+    if (Number.isNaN(byte)) return null;
+    bytes[index] = byte;
   }
   if (唯一标识字节缓存.size > 16) 唯一标识字节缓存.clear();
-  唯一标识字节缓存.set(令牌305, 字节304);
-  return 字节304;
+  唯一标识字节缓存.set(token, bytes);
+  return bytes;
 }
-function 处理值唯一标识(bytes, offset, token) {
-  const id = 获取唯一标识字节(token);
+function matchesUUID(bytes, offset, token) {
+  const id = getUUIDBytes(token);
   return !!id && id.every((byte, index) => bytes[offset + index] === byte);
 }
-function 解析网页套接字值头部(块297, 令牌) {
-  const 字节296 = 处理值值8数组(块297);
-  if (字节296.byteLength < 24) return { hasError: true };
-  const 本地值295 = 字节296.subarray(0, 1);
-  if (!处理值唯一标识(字节296, 1, 令牌)) return { hasError: true };
-  const 值长度294 = 字节296[17];
-  const 命令索引 = 18 + 值长度294;
-  if (字节296.byteLength < 命令索引 + 5) return { hasError: true };
-  const 命令293 = 字节296[命令索引];
+function parseVlessHeader(packet, 令牌) {
+  const bytes = asBytes(packet);
+  if (bytes.byteLength < 24) return { hasError: true };
+  const version = bytes.subarray(0, 1);
+  if (!matchesUUID(bytes, 1, 令牌)) return { hasError: true };
+  const optionsLength = bytes[17];
+  const 命令索引 = 18 + optionsLength;
+  if (bytes.byteLength < 命令索引 + 5) return { hasError: true };
+  const command = bytes[命令索引];
   let 是否用户数据报 = false;
-  if (命令293 === 1) {
-  } else if (命令293 === 2) {
+  if (command === 1) {
+  } else if (command === 2) {
     是否用户数据报 = true;
   } else {
     return { hasError: true };
   }
-  const 端口索引292 = 19 + 值长度294;
-  const 端口291 = 字节296[端口索引292] << 8 | 字节296[端口索引292 + 1];
-  let 地址索引290 = 端口索引292 + 2, 地址长度289 = 0, 地址值索引 = 地址索引290 + 1, 主机名288 = "";
-  const 地址类型287 = 字节296[地址索引290];
-  switch (地址类型287) {
+  const portIndex = 19 + optionsLength;
+  const port = bytes[portIndex] << 8 | bytes[portIndex + 1];
+  let addressIndex = portIndex + 2, addressLength = 0, 地址值索引 = addressIndex + 1, hostname = "";
+  const addressType = bytes[addressIndex];
+  switch (addressType) {
     case 地址类型_四版:
-      地址长度289 = 4;
-      if (字节296.byteLength < 地址值索引 + 地址长度289) return { hasError: true };
-      主机名288 = `${字节296[地址值索引]}.${字节296[地址值索引 + 1]}.${字节296[地址值索引 + 2]}.${字节296[地址值索引 + 3]}`;
+      addressLength = 4;
+      if (bytes.byteLength < 地址值索引 + addressLength) return { hasError: true };
+      hostname = `${bytes[地址值索引]}.${bytes[地址值索引 + 1]}.${bytes[地址值索引 + 2]}.${bytes[地址值索引 + 3]}`;
       break;
     case 地址类型_网址:
-      if (字节296.byteLength < 地址值索引 + 1) return { hasError: true };
-      地址长度289 = 字节296[地址值索引++];
-      if (字节296.byteLength < 地址值索引 + 地址长度289) return { hasError: true };
-      主机名288 = 共享解码器.decode(字节296.subarray(地址值索引, 地址值索引 + 地址长度289));
+      if (bytes.byteLength < 地址值索引 + 1) return { hasError: true };
+      addressLength = bytes[地址值索引++];
+      if (bytes.byteLength < 地址值索引 + addressLength) return { hasError: true };
+      hostname = 共享解码器.decode(bytes.subarray(地址值索引, 地址值索引 + addressLength));
       break;
     case 地址类型_六版:
-      地址长度289 = 16;
-      if (字节296.byteLength < 地址值索引 + 地址长度289) return { hasError: true };
-      const 值6286 = [];
-      const 值6视图 = new DataView(字节296.buffer, 字节296.byteOffset + 地址值索引, 地址长度289);
-      for (let 索引值285 = 0; 索引值285 < 8; 索引值285++) 值6286.push(值6视图.getUint16(索引值285 * 2).toString(16));
-      主机名288 = 值6286.join(":");
+      addressLength = 16;
+      if (bytes.byteLength < 地址值索引 + addressLength) return { hasError: true };
+      const segments = [];
+      const addressView = new DataView(bytes.buffer, bytes.byteOffset + 地址值索引, addressLength);
+      for (let index = 0; index < 8; index++) segments.push(addressView.getUint16(index * 2).toString(16));
+      hostname = segments.join(":");
       break;
     default:
       return { hasError: true };
   }
-  if (!主机名288) return { hasError: true };
+  if (!hostname) return { hasError: true };
   return {
     hasError: false,
-    port: 端口291,
-    hostname: 主机名288,
+    port,
+    hostname,
     isUDP: 是否用户数据报,
-    rawIndex: 地址值索引 + 地址长度289,
-    version: 本地值295
+    rawIndex: 地址值索引 + addressLength,
+    version
   };
 }
-function 制作值流(套接字284, 值数据头部) {
-  let 本地值283 = false;
+function webSocketReadable(websocket, 值数据头部) {
+  let cancelled = false;
   return new ReadableStream({
-    start(控制器282) {
-      套接字284.addEventListener("message", (事件) => {
-        if (!本地值283) 控制器282.enqueue(处理值值8数组(事件.data));
+    start(controller) {
+      websocket.addEventListener("message", (事件) => {
+        if (!cancelled) controller.enqueue(asBytes(事件.data));
       });
-      套接字284.addEventListener("close", () => {
-        if (!本地值283) {
-          关闭套接字值(套接字284);
-          控制器282.close();
+      websocket.addEventListener("close", () => {
+        if (!cancelled) {
+          closeWebSocket(websocket);
+          controller.close();
         }
       });
-      套接字284.addEventListener("error", (错误281) => 控制器282.error(错误281));
+      websocket.addEventListener("error", (error2) => controller.error(error2));
       const {
         earlyData: 值数据,
-        error: 错误280
-      } = 处理基础64值数组(值数据头部);
-      if (错误280) 控制器282.error(错误280);
-      else if (值数据) 控制器282.enqueue(处理值值8数组(值数据));
+        error
+      } = decodeEarlyData(值数据头部);
+      if (error) controller.error(error);
+      else if (值数据) controller.enqueue(asBytes(值数据));
     },
     cancel() {
-      本地值283 = true;
-      关闭套接字值(套接字284);
+      cancelled = true;
+      closeWebSocket(websocket);
     }
   });
 }
-async function 转发远程数据到WS(远程套接字, 网页套接字278, 头部数据, 重试值) {
-  let 头部277 = 头部数据, 是否有数据 = false, 本地值276 = false;
+async function relayToWebSocket(远程套接字, websocket, 头部数据, 重试值) {
+  let responseHeader = 头部数据, 是否有数据 = false, failedOrRetried = false;
   let 首次字节计时器 = null;
   if (重试值) {
     首次字节计时器 = setTimeout(() => {
-      if (!是否有数据 && !本地值276) {
-        本地值276 = true;
+      if (!是否有数据 && !failedOrRetried) {
+        failedOrRetried = true;
         try {
           远程套接字.close && 远程套接字.close();
         } catch {
@@ -4147,26 +4147,26 @@ async function 转发远程数据到WS(远程套接字, 网页套接字278, 头�
       }
     }, 首字节超时);
   }
-  const 本地值274 = 创建WS下行聚合器(网页套接字278);
-  let 读取器273 = null;
-  let 本地值272 = true;
-  let 缓冲271 = new ArrayBuffer(传输块大小);
+  const batcher = createDownloadBatcher(websocket);
+  let reader = null;
+  let byob = true;
+  let buffer = new ArrayBuffer(传输块大小);
   try {
     try {
-      读取器273 = 远程套接字.readable.getReader({
+      reader = 远程套接字.readable.getReader({
         mode: "byob"
       });
     } catch {
-      本地值272 = false;
-      读取器273 = 远程套接字.readable.getReader();
+      byob = false;
+      reader = 远程套接字.readable.getReader();
     }
     for (; ; ) {
-      const 结果269 = 本地值272 ? await 读取器273.read(new Uint8Array(缓冲271, 0, 传输块大小)) : await 读取器273.read();
-      if (结果269.done) break;
-      const 读取值 = 结果269.value;
-      let 块268 = 处理值值8数组(读取值);
-      const 值缓冲 = 本地值272 && 读取值?.buffer instanceof ArrayBuffer && 读取值.buffer.byteLength >= 传输块大小 ? 读取值.buffer : new ArrayBuffer(传输块大小);
-      if (!块268.byteLength) continue;
+      const result = byob ? await reader.read(new Uint8Array(buffer, 0, 传输块大小)) : await reader.read();
+      if (result.done) break;
+      const 读取值 = result.value;
+      let chunk = asBytes(读取值);
+      const 值缓冲 = byob && 读取值?.buffer instanceof ArrayBuffer && 读取值.buffer.byteLength >= 传输块大小 ? 读取值.buffer : new ArrayBuffer(传输块大小);
+      if (!chunk.byteLength) continue;
       if (!是否有数据) {
         是否有数据 = true;
         if (首次字节计时器) {
@@ -4174,30 +4174,30 @@ async function 转发远程数据到WS(远程套接字, 网页套接字278, 头�
           首次字节计时器 = null;
         }
       }
-      if (网页套接字278.readyState !== 1) throw new Error(错误_网页套接字未打开);
-      if (头部277) {
-        块268 = 拼接值8数组(头部277, 块268);
-        头部277 = null;
+      if (websocket.readyState !== 1) throw new Error(错误_网页套接字未打开);
+      if (responseHeader) {
+        chunk = concatBytes(responseHeader, chunk);
+        responseHeader = null;
       }
-      if (块268.byteLength >= 传输块大小 >> 1) {
-        本地值274.flush();
-        网页套接字278.send(块268);
-        if (本地值272) 缓冲271 = new ArrayBuffer(传输块大小);
+      if (chunk.byteLength >= 传输块大小 >> 1) {
+        batcher.flush();
+        websocket.send(chunk);
+        if (byob) buffer = new ArrayBuffer(传输块大小);
       } else {
-        本地值274.send(块268.slice());
-        if (本地值272) 缓冲271 = 值缓冲;
+        batcher.send(chunk.slice());
+        if (byob) buffer = 值缓冲;
       }
     }
-    本地值274.flush();
+    batcher.flush();
   } catch {
-    if (!本地值276) 关闭套接字值(网页套接字278);
+    if (!failedOrRetried) closeWebSocket(websocket);
   } finally {
     try {
-      本地值274.flush();
+      batcher.flush();
     } catch {
     }
     try {
-      读取器273?.releaseLock();
+      reader?.releaseLock();
     } catch {
     }
   }
@@ -4205,14 +4205,14 @@ async function 转发远程数据到WS(远程套接字, 网页套接字278, 头�
     clearTimeout(首次字节计时器);
     首次字节计时器 = null;
   }
-  if (!是否有数据 && !本地值276 && 重试值) 重试值();
+  if (!是否有数据 && !failedOrRetried && 重试值) 重试值();
 }
-async function 处理值用户数据报(用户数据报块, 网页套接字, 值头部, 请求值, 配置快照, signal) {
+async function forwardDNS(用户数据报块, 网页套接字, 值头部, 请求值, 配置快照, signal) {
   for await (const attempt of outboundAttempts(配置快照, "8.8.4.4", 53)) {
     if (signal.aborted) break;
     let socket;
     try {
-      socket = await 建立出站连接(
+      socket = await dialOutbound(
         attempt.address,
         attempt.port,
         用户数据报块,
@@ -4222,7 +4222,7 @@ async function 处理值用户数据报(用户数据报块, 网页套接字, 值
         signal,
         1
       );
-      await 转发远程数据到WS(socket, 网页套接字, 值头部, null);
+      await relayToWebSocket(socket, 网页套接字, 值头部, null);
       return;
     } catch {
     } finally {
@@ -4232,63 +4232,63 @@ async function 处理值用户数据报(用户数据报块, 网页套接字, 值
       }
     }
   }
-  关闭套接字值(网页套接字);
+  closeWebSocket(网页套接字);
 }
-async function 处理值代理连接(地址262, 端口261, 代理配置, 请求值258, 首包数据, open) {
+async function connectSOCKS(address, port, 代理配置, fetcher, 首包数据, open) {
   if (代理配置 && (代理配置.kind === 代理种类_隧道 || 代理配置.kind === 代理种类_安全隧道)) {
-    return 处理值隧道连接(地址262, 端口261, 代理配置, 请求值258, 首包数据, open);
+    return connectHTTP(address, port, 代理配置, fetcher, 首包数据, open);
   }
   const {
-    username: 本地值260,
-    password: 密码259,
-    hostname: 主机名258,
-    socksPort: 代理端口257
+    username,
+    password,
+    hostname: proxyHost,
+    socksPort: proxyPort
   } = 代理配置;
-  const 套接字256 = 处理打开值套接字(主机名258, 代理端口257, 请求值258, open);
-  let 写入器255 = null;
-  let 读取器254 = null;
+  const socket = openSocket(proxyHost, proxyPort, fetcher, open);
+  let writer = null;
+  let reader = null;
   try {
     let 取走 = function(长度) {
       const 结果 = 残留字节.subarray(0, 长度);
       残留字节 = 残留字节.subarray(长度);
       return 结果;
     };
-    if (套接字256.opened) await 套接字256.opened;
-    写入器255 = 套接字256.writable.getWriter();
-    await 写入器255.write(new Uint8Array(本地值260 ? [5, 2, 0, 2] : [5, 1, 0]));
-    读取器254 = 套接字256.readable.getReader();
+    if (socket.opened) await socket.opened;
+    writer = socket.writable.getWriter();
+    await writer.write(new Uint8Array(username ? [5, 2, 0, 2] : [5, 1, 0]));
+    reader = socket.readable.getReader();
     let 残留字节 = new Uint8Array(0);
     async function 读满(需要长度) {
       while (残留字节.length < 需要长度) {
-        const { value: 分片, done: 已结束 } = await 读取器254.read();
+        const { value: 分片, done: 已结束 } = await reader.read();
         if (已结束 || !分片) throw new Error(错误_代理连接失败);
-        残留字节 = 拼接值8数组(残留字节, 分片);
+        残留字节 = concatBytes(残留字节, 分片);
       }
       return 残留字节;
     }
-    let 本地值253 = await 读满(2);
-    if (本地值253[0] !== 5 || 本地值253[1] === 255) throw new Error(错误_代理无可用方法);
-    const 选中方法 = 本地值253[1];
+    let reply = await 读满(2);
+    if (reply[0] !== 5 || reply[1] === 255) throw new Error(错误_代理无可用方法);
+    const 选中方法 = reply[1];
     取走(2);
     if (选中方法 === 2) {
-      if (!本地值260 || !密码259) throw new Error(错误_代理需要认证);
-      const 编码器252 = new TextEncoder();
-      const 用户字节 = 编码器252.encode(本地值260), 密码字节 = 编码器252.encode(密码259);
+      if (!username || !password) throw new Error(错误_代理需要认证);
+      const encoder2 = new TextEncoder();
+      const 用户字节 = encoder2.encode(username), 密码字节 = encoder2.encode(password);
       if (用户字节.length > 255 || 密码字节.length > 255) throw new Error(错误_代理认证失败);
       const 认证请求 = new Uint8Array([1, 用户字节.length, ...用户字节, 密码字节.length, ...密码字节]);
-      await 写入器255.write(认证请求);
-      本地值253 = await 读满(2);
-      if (本地值253[0] !== 1 || 本地值253[1] !== 0) throw new Error(错误_代理认证失败);
+      await writer.write(认证请求);
+      reply = await 读满(2);
+      if (reply[0] !== 1 || reply[1] !== 0) throw new Error(错误_代理认证失败);
       取走(2);
     }
-    const 编码器251 = new TextEncoder();
-    const 目标字节 = 编码器251.encode(规范化目标地址(地址262));
+    const encoder = new TextEncoder();
+    const 目标字节 = encoder.encode(normalizeTarget(address));
     if (目标字节.length > 255) throw new Error(错误_代理连接失败);
-    const 本地值250 = new Uint8Array([3, 目标字节.length, ...目标字节]);
-    await 写入器255.write(new Uint8Array([5, 1, 0, ...本地值250, 端口261 >> 8, 端口261 & 255]));
-    本地值253 = await 读满(4);
-    if (本地值253[1] !== 0) throw new Error(错误_代理连接失败);
-    const 绑定地址类型 = 本地值253[3];
+    const targetAddress = new Uint8Array([3, 目标字节.length, ...目标字节]);
+    await writer.write(new Uint8Array([5, 1, 0, ...targetAddress, port >> 8, port & 255]));
+    reply = await 读满(4);
+    if (reply[1] !== 0) throw new Error(错误_代理连接失败);
+    const 绑定地址类型 = reply[3];
     let 应答长度;
     if (绑定地址类型 === 1) {
       应答长度 = 10;
@@ -4301,28 +4301,28 @@ async function 处理值代理连接(地址262, 端口261, 代理配置, 请求�
     }
     await 读满(应答长度);
     取走(应答长度);
-    if (首包数据 && 首包数据.byteLength) await 写入器255.write(首包数据);
-    写入器255.releaseLock();
-    读取器254.releaseLock();
-    if (残留字节.length) return 包装残留套接字(套接字256, 残留字节);
-    return 套接字256;
+    if (首包数据 && 首包数据.byteLength) await writer.write(首包数据);
+    writer.releaseLock();
+    reader.releaseLock();
+    if (残留字节.length) return prependSocket(socket, 残留字节);
+    return socket;
   } catch (代理错误) {
     try {
-      写入器255?.releaseLock();
+      writer?.releaseLock();
     } catch {
     }
     try {
-      读取器254?.releaseLock();
+      reader?.releaseLock();
     } catch {
     }
     throw 代理错误;
   }
 }
-function 规范化目标地址(地址234值) {
-  const 文本 = String(地址234值 || "");
+function normalizeTarget(address) {
+  const 文本 = String(address || "");
   return /^\[.*\]$/.test(文本) ? 文本.slice(1, -1) : 文本;
 }
-async function 处理值隧道连接(地址238值, 端口237值, 代理配置, 请求值236值, 首包数据235值, open) {
+async function connectHTTP(address, port, 代理配置, fetcher, payload, open) {
   const {
     username: 隧道用户,
     password: 隧道密码,
@@ -4338,10 +4338,10 @@ async function 处理值隧道连接(地址238值, 端口237值, 代理配置, �
     hostname: 隧道主机,
     port: 隧道端口
   };
-  const 套接字 = open(() => 请求值236值 && typeof 请求值236值.connect === "function" ? 连接选项 === void 0 ? 请求值236值.connect(目标参数) : 请求值236值.connect(目标参数, 连接选项) : 连接(目标参数, 连接选项));
+  const 套接字 = open(() => fetcher && typeof fetcher.connect === "function" ? 连接选项 === void 0 ? fetcher.connect(目标参数) : fetcher.connect(目标参数, 连接选项) : 连接(目标参数, 连接选项));
   if (套接字?.opened) await 套接字.opened;
-  const 目标主机 = 地址238值.includes(":") && !/^\[.*\]$/.test(地址238值) ? `[${地址238值}]` : 地址238值;
-  const 目标地址 = `${目标主机}:${端口237值}`;
+  const 目标主机 = address.includes(":") && !/^\[.*\]$/.test(address) ? `[${address}]` : address;
+  const 目标地址 = `${目标主机}:${port}`;
   let 请求头 = `${文本_连接方法} ${目标地址}${文本_协议版本}${文本_换行}${文本_主机头}${目标地址}${文本_换行}${文本_用户代理头}${文本_换行}${文本_代理保持}${文本_换行}`;
   if (隧道用户) {
     请求头 += `${文本_代理认证头}${btoa(String.fromCharCode(...new TextEncoder().encode(`${隧道用户}:${隧道密码 || ""}`)))}${文本_换行}`;
@@ -4360,7 +4360,7 @@ async function 处理值隧道连接(地址238值, 端口237值, 代理配置, �
         done: 已结束
       } = await 读取器.read();
       if (已结束 || !分片) throw new Error(错误_代理隧道失败);
-      缓冲 = 拼接值8数组(缓冲, 分片);
+      缓冲 = concatBytes(缓冲, 分片);
       for (let 位置 = 0; 位置 + 3 < 缓冲.length; 位置++) {
         if (缓冲[位置] === 分隔[0] && 缓冲[位置 + 1] === 分隔[1] && 缓冲[位置 + 2] === 分隔[2] && 缓冲[位置 + 3] === 分隔[3]) {
           头部结束 = 位置 + 4;
@@ -4374,10 +4374,10 @@ async function 处理值隧道连接(地址238值, 端口237值, 代理配置, �
     const 状态码 = Number(状态行.split(" ")[1]);
     if (!(状态码 >= 200 && 状态码 < 300)) throw new Error(错误_代理隧道失败);
     const 残留数据 = 缓冲.subarray(头部结束);
-    if (首包数据235值 && 首包数据235值.byteLength) await 写入器.write(首包数据235值);
+    if (payload && payload.byteLength) await 写入器.write(payload);
     写入器.releaseLock();
     读取器.releaseLock();
-    if (残留数据.byteLength) return 包装残留套接字(套接字, 残留数据);
+    if (残留数据.byteLength) return prependSocket(套接字, 残留数据);
     return 套接字;
   } catch (隧道错误) {
     try {
@@ -4391,7 +4391,7 @@ async function 处理值隧道连接(地址238值, 端口237值, 代理配置, �
     throw 隧道错误;
   }
 }
-function 包装残留套接字(套接字, 残留数据) {
+function prependSocket(套接字, 残留数据) {
   let 上游读取器 = null;
   const 新可读 = new ReadableStream({
     start(控制器) {
@@ -4424,10 +4424,10 @@ function 包装残留套接字(套接字, 残留数据) {
     close: () => 套接字.close()
   };
 }
-async function 解析木马头部(缓冲234, 本地值233, 传输路径 = "") {
-  const 字节 = 处理值值8数组(缓冲234);
-  const 密码值井号 = 传输路径 || 本地值233;
-  const 值224密码 = await 处理值224井号(密码值井号);
+async function parseTrojanHeader(packet, token, 传输路径 = "") {
+  const 字节 = asBytes(packet);
+  const 密码值井号 = 传输路径 || token;
+  const expectedHash = await sha224(密码值井号);
   if (字节.byteLength < 56) {
     return { hasError: true };
   }
@@ -4435,233 +4435,233 @@ async function 解析木马头部(缓冲234, 本地值233, 传输路径 = "") {
   if (字节[56] !== 13 || 字节[57] !== 10) {
     return { hasError: true };
   }
-  const 密码232 = 共享解码器.decode(字节.subarray(0, 值值索引));
-  if (密码232 !== 值224密码) {
+  const passwordHash = 共享解码器.decode(字节.subarray(0, 值值索引));
+  if (passwordHash !== expectedHash) {
     return { hasError: true };
   }
-  const 代理5数据缓冲 = 字节.subarray(值值索引 + 2);
-  if (代理5数据缓冲.byteLength < 6) {
+  const requestData = 字节.subarray(值值索引 + 2);
+  if (requestData.byteLength < 6) {
     return { hasError: true };
   }
-  const 视图231 = new DataView(代理5数据缓冲.buffer, 代理5数据缓冲.byteOffset, 代理5数据缓冲.byteLength);
-  const 命令230 = 视图231.getUint8(0);
-  if (命令230 !== 1) {
+  const view = new DataView(requestData.buffer, requestData.byteOffset, requestData.byteLength);
+  const command = view.getUint8(0);
+  if (command !== 1) {
     return { hasError: true };
   }
-  const 本地值229 = 视图231.getUint8(1);
+  const addressType = view.getUint8(1);
   let 地址长度 = 0;
-  let 地址索引228 = 2;
-  let 地址227 = "";
-  switch (本地值229) {
+  let addressOffset = 2;
+  let hostname = "";
+  switch (addressType) {
     case 1:
       地址长度 = 4;
-      地址227 = 代理5数据缓冲.subarray(地址索引228, 地址索引228 + 地址长度).join(".");
+      hostname = requestData.subarray(addressOffset, addressOffset + 地址长度).join(".");
       break;
     case 3:
-      地址长度 = 代理5数据缓冲[地址索引228];
-      地址索引228 += 1;
-      地址227 = 共享解码器.decode(代理5数据缓冲.subarray(地址索引228, 地址索引228 + 地址长度));
+      地址长度 = requestData[addressOffset];
+      addressOffset += 1;
+      hostname = 共享解码器.decode(requestData.subarray(addressOffset, addressOffset + 地址长度));
       break;
     case 4:
       地址长度 = 16;
-      const 数据视图 = new DataView(代理5数据缓冲.buffer, 代理5数据缓冲.byteOffset + 地址索引228, 地址长度);
-      const 值6 = [];
-      for (let 索引值226 = 0; 索引值226 < 8; 索引值226++) {
-        值6.push(数据视图.getUint16(索引值226 * 2).toString(16));
+      const 数据视图 = new DataView(requestData.buffer, requestData.byteOffset + addressOffset, 地址长度);
+      const segments = [];
+      for (let index = 0; index < 8; index++) {
+        segments.push(数据视图.getUint16(index * 2).toString(16));
       }
-      地址227 = 值6.join(":");
+      hostname = segments.join(":");
       break;
     default:
       return { hasError: true };
   }
-  if (!地址227) {
+  if (!hostname) {
     return { hasError: true };
   }
-  const 端口索引225 = 地址索引228 + 地址长度;
-  const 端口远程 = new DataView(代理5数据缓冲.buffer, 代理5数据缓冲.byteOffset + 端口索引225, 2).getUint16(0);
+  const portOffset = addressOffset + 地址长度;
+  const 端口远程 = new DataView(requestData.buffer, requestData.byteOffset + portOffset, 2).getUint16(0);
   return {
     hasError: false,
     port: 端口远程,
-    hostname: 地址227,
-    rawClientData: 代理5数据缓冲.subarray(端口索引225 + 4)
+    hostname,
+    rawClientData: requestData.subarray(portOffset + 4)
   };
 }
-async function 处理值224井号(文本224) {
+async function sha224(text) {
   const 编码器 = new TextEncoder();
-  const 数据223 = 编码器.encode(文本224);
-  const 本地值222 = [1116352408, 1899447441, 3049323471, 3921009573, 961987163, 1508970993, 2453635748, 2870763221, 3624381080, 310598401, 607225278, 1426881987, 1925078388, 2162078206, 2614888103, 3248222580, 3835390401, 4022224774, 264347078, 604807628, 770255983, 1249150122, 1555081692, 1996064986, 2554220882, 2821834349, 2952996808, 3210313671, 3336571891, 3584528711, 113926993, 338241895, 666307205, 773529912, 1294757372, 1396182291, 1695183700, 1986661051, 2177026350, 2456956037, 2730485921, 2820302411, 3259730800, 3345764771, 3516065817, 3600352804, 4094571909, 275423344, 430227734, 506948616, 659060556, 883997877, 958139571, 1322822218, 1537002063, 1747873779, 1955562222, 2024104815, 2227730452, 2361852424, 2428436474, 2756734187, 3204031479, 3329325298];
+  const message = 编码器.encode(text);
+  const roundConstants = [1116352408, 1899447441, 3049323471, 3921009573, 961987163, 1508970993, 2453635748, 2870763221, 3624381080, 310598401, 607225278, 1426881987, 1925078388, 2162078206, 2614888103, 3248222580, 3835390401, 4022224774, 264347078, 604807628, 770255983, 1249150122, 1555081692, 1996064986, 2554220882, 2821834349, 2952996808, 3210313671, 3336571891, 3584528711, 113926993, 338241895, 666307205, 773529912, 1294757372, 1396182291, 1695183700, 1986661051, 2177026350, 2456956037, 2730485921, 2820302411, 3259730800, 3345764771, 3516065817, 3600352804, 4094571909, 275423344, 430227734, 506948616, 659060556, 883997877, 958139571, 1322822218, 1537002063, 1747873779, 1955562222, 2024104815, 2227730452, 2361852424, 2428436474, 2756734187, 3204031479, 3329325298];
   let 头部游标 = [3238371032, 914150663, 812702999, 4144912697, 4290775857, 1750603025, 1694076839, 3204075428];
-  const 消息长度 = 数据223.length;
-  const 值长度221 = 消息长度 * 8;
-  const 值长度220 = Math.ceil((消息长度 + 9) / 64) * 64;
-  const 本地值219 = new Uint8Array(值长度220);
-  本地值219.set(数据223);
-  本地值219[消息长度] = 128;
-  const 视图 = new DataView(本地值219.buffer);
-  视图.setUint32(值长度220 - 4, 值长度221, false);
-  for (let 块218 = 0; 块218 < 值长度220; 块218 += 64) {
+  const 消息长度 = message.length;
+  const bitLength = 消息长度 * 8;
+  const paddedLength = Math.ceil((消息长度 + 9) / 64) * 64;
+  const padded = new Uint8Array(paddedLength);
+  padded.set(message);
+  padded[消息长度] = 128;
+  const 视图 = new DataView(padded.buffer);
+  视图.setUint32(paddedLength - 4, bitLength, false);
+  for (let blockOffset = 0; blockOffset < paddedLength; blockOffset += 64) {
     const 写入器包装 = new Uint32Array(64);
-    for (let 索引值217 = 0; 索引值217 < 16; 索引值217++) {
-      写入器包装[索引值217] = 视图.getUint32(块218 + 索引值217 * 4, false);
+    for (let index = 0; index < 16; index++) {
+      写入器包装[index] = 视图.getUint32(blockOffset + index * 4, false);
     }
-    for (let 索引值216 = 16; 索引值216 < 64; 索引值216++) {
-      const 值0215 = 处理值值200(写入器包装[索引值216 - 15], 7) ^ 处理值值200(写入器包装[索引值216 - 15], 18) ^ 写入器包装[索引值216 - 15] >>> 3;
-      const 值1214 = 处理值值200(写入器包装[索引值216 - 2], 17) ^ 处理值值200(写入器包装[索引值216 - 2], 19) ^ 写入器包装[索引值216 - 2] >>> 10;
-      写入器包装[索引值216] = 写入器包装[索引值216 - 16] + 值0215 + 写入器包装[索引值216 - 7] + 值1214 >>> 0;
+    for (let index = 16; index < 64; index++) {
+      const sigma0 = rotateRight(写入器包装[index - 15], 7) ^ rotateRight(写入器包装[index - 15], 18) ^ 写入器包装[index - 15] >>> 3;
+      const sigma1 = rotateRight(写入器包装[index - 2], 17) ^ rotateRight(写入器包装[index - 2], 19) ^ 写入器包装[index - 2] >>> 10;
+      写入器包装[index] = 写入器包装[index - 16] + sigma0 + 写入器包装[index - 7] + sigma1 >>> 0;
     }
-    let [甲值213, 乙值, 丙值212, 丁值211, 事件值210, 表单值, 本地值209, 头值208] = 头部游标;
-    for (let 索引值207 = 0; 索引值207 < 64; 索引值207++) {
-      const 值1206 = 处理值值200(事件值210, 6) ^ 处理值值200(事件值210, 11) ^ 处理值值200(事件值210, 25);
-      const 本地值205 = 事件值210 & 表单值 ^ ~事件值210 & 本地值209;
-      const 值1 = 头值208 + 值1206 + 本地值205 + 本地值222[索引值207] + 写入器包装[索引值207] >>> 0;
-      const 值0 = 处理值值200(甲值213, 2) ^ 处理值值200(甲值213, 13) ^ 处理值值200(甲值213, 22);
-      const 本地值204 = 甲值213 & 乙值 ^ 甲值213 & 丙值212 ^ 乙值 & 丙值212;
-      const 值2203 = 值0 + 本地值204 >>> 0;
-      头值208 = 本地值209;
-      本地值209 = 表单值;
-      表单值 = 事件值210;
-      事件值210 = 丁值211 + 值1 >>> 0;
-      丁值211 = 丙值212;
-      丙值212 = 乙值;
-      乙值 = 甲值213;
-      甲值213 = 值1 + 值2203 >>> 0;
+    let [a, 乙值, c, d, e, 表单值, g, h] = 头部游标;
+    for (let round = 0; round < 64; round++) {
+      const sum1 = rotateRight(e, 6) ^ rotateRight(e, 11) ^ rotateRight(e, 25);
+      const choice = e & 表单值 ^ ~e & g;
+      const temp1 = h + sum1 + choice + roundConstants[round] + 写入器包装[round] >>> 0;
+      const sum0 = rotateRight(a, 2) ^ rotateRight(a, 13) ^ rotateRight(a, 22);
+      const majority = a & 乙值 ^ a & c ^ 乙值 & c;
+      const temp2 = sum0 + majority >>> 0;
+      h = g;
+      g = 表单值;
+      表单值 = e;
+      e = d + temp1 >>> 0;
+      d = c;
+      c = 乙值;
+      乙值 = a;
+      a = temp1 + temp2 >>> 0;
     }
-    头部游标[0] = 头部游标[0] + 甲值213 >>> 0;
+    头部游标[0] = 头部游标[0] + a >>> 0;
     头部游标[1] = 头部游标[1] + 乙值 >>> 0;
-    头部游标[2] = 头部游标[2] + 丙值212 >>> 0;
-    头部游标[3] = 头部游标[3] + 丁值211 >>> 0;
-    头部游标[4] = 头部游标[4] + 事件值210 >>> 0;
+    头部游标[2] = 头部游标[2] + c >>> 0;
+    头部游标[3] = 头部游标[3] + d >>> 0;
+    头部游标[4] = 头部游标[4] + e >>> 0;
     头部游标[5] = 头部游标[5] + 表单值 >>> 0;
-    头部游标[6] = 头部游标[6] + 本地值209 >>> 0;
-    头部游标[7] = 头部游标[7] + 头值208 >>> 0;
+    头部游标[6] = 头部游标[6] + g >>> 0;
+    头部游标[7] = 头部游标[7] + h >>> 0;
   }
-  const 结果202 = [];
-  for (let 索引值201 = 0; 索引值201 < 7; 索引值201++) {
-    结果202.push((头部游标[索引值201] >>> 24 & 255).toString(16).padStart(2, "0"), (头部游标[索引值201] >>> 16 & 255).toString(16).padStart(2, "0"), (头部游标[索引值201] >>> 8 & 255).toString(16).padStart(2, "0"), (头部游标[索引值201] & 255).toString(16).padStart(2, "0"));
+  const digest = [];
+  for (let index = 0; index < 7; index++) {
+    digest.push((头部游标[index] >>> 24 & 255).toString(16).padStart(2, "0"), (头部游标[index] >>> 16 & 255).toString(16).padStart(2, "0"), (头部游标[index] >>> 8 & 255).toString(16).padStart(2, "0"), (头部游标[index] & 255).toString(16).padStart(2, "0"));
   }
-  return 结果202.join("");
+  return digest.join("");
 }
-function 处理值值200(值199, 本地值198) {
-  return 值199 >>> 本地值198 | 值199 << 32 - 本地值198;
+function rotateRight(value, bits) {
+  return value >>> bits | value << 32 - bits;
 }
-var 值值197 = 0;
+var activeXHTTPConnections = 0;
 var 值超文本缓冲大小 = 128 * 1024;
 var 连接超时值 = 5e3;
 var 上限值 = 32;
-async function 读取扩展超文本头部(本地值180, 唯一标识字符串, signal) {
-  const 读取器179 = 本地值180.getReader({
+async function readXHTTPHeader(body, 唯一标识字符串, signal) {
+  const reader = body.getReader({
     mode: "byob"
   });
   let 已超时 = false;
   const abort = () => {
-    读取器179.cancel(signal.reason).catch(() => {
+    reader.cancel(signal.reason).catch(() => {
     });
   };
   signal?.addEventListener("abort", abort, { once: true });
   if (signal?.aborted) abort();
   const 超时标识 = setTimeout(() => {
     已超时 = true;
-    读取器179.cancel().catch(() => {
+    reader.cancel().catch(() => {
     });
   }, 连接超时值);
   try {
-    let 结果值178 = await 读取器179.readAtLeast(1 + 16 + 1, new Uint8Array(值超文本缓冲大小));
-    if (!结果值178.value || 结果值178.value.length < 1 + 16 + 1) {
+    let result = await reader.readAtLeast(1 + 16 + 1, new Uint8Array(值超文本缓冲大小));
+    if (!result.value || result.value.length < 1 + 16 + 1) {
       throw new Error("header too short");
     }
-    let 本地值177 = 0;
+    let bufferedLength = 0;
     let 索引 = 0;
-    let 缓存 = 结果值178.value;
-    本地值177 += 结果值178.value.length;
-    const 本地值176 = 缓存[0];
-    if (!处理值唯一标识(缓存, 1, 唯一标识字符串)) {
+    let 缓存 = result.value;
+    bufferedLength += result.value.length;
+    const version = 缓存[0];
+    if (!matchesUUID(缓存, 1, 唯一标识字符串)) {
       throw new Error(`invalid UUID`);
     }
-    const 值长度173 = 缓存[1 + 16];
-    const 地址值1 = 1 + 16 + 1 + 值长度173 + 1 + 2 + 1;
-    if (地址值1 + 1 > 本地值177) {
-      if (结果值178.done) {
+    const optionsLength = 缓存[1 + 16];
+    const addressOffset = 1 + 16 + 1 + optionsLength + 1 + 2 + 1;
+    if (addressOffset + 1 > bufferedLength) {
+      if (result.done) {
         throw new Error(`header too short`);
       }
-      索引 = 地址值1 + 1 - 本地值177;
-      结果值178 = await 读取器179.readAtLeast(索引, new Uint8Array(值超文本缓冲大小));
-      if (!结果值178.value || 结果值178.value.length < 索引) {
+      索引 = addressOffset + 1 - bufferedLength;
+      result = await reader.readAtLeast(索引, new Uint8Array(值超文本缓冲大小));
+      if (!result.value || result.value.length < 索引) {
         throw new Error("header too short");
       }
-      本地值177 += 结果值178.value.length;
-      缓存 = 拼接值8数组(缓存, 结果值178.value);
+      bufferedLength += result.value.length;
+      缓存 = concatBytes(缓存, result.value);
     }
-    const 命令 = 缓存[1 + 16 + 1 + 值长度173];
+    const 命令 = 缓存[1 + 16 + 1 + optionsLength];
     if (命令 !== 1) {
       throw new Error(`unsupported command: ${命令}`);
     }
-    const 端口172 = (缓存[地址值1 - 1 - 2] << 8) + 缓存[地址值1 - 1 - 1];
-    const 本地值171 = 缓存[地址值1 - 1];
+    const port = (缓存[addressOffset - 1 - 2] << 8) + 缓存[addressOffset - 1 - 1];
+    const addressType = 缓存[addressOffset - 1];
     let 头部长度 = -1;
-    if (本地值171 === 地址类型_四版) {
-      头部长度 = 地址值1 + 4;
-    } else if (本地值171 === 地址类型_六版) {
-      头部长度 = 地址值1 + 16;
-    } else if (本地值171 === 地址类型_网址) {
-      头部长度 = 地址值1 + 1 + 缓存[地址值1];
+    if (addressType === 地址类型_四版) {
+      头部长度 = addressOffset + 4;
+    } else if (addressType === 地址类型_六版) {
+      头部长度 = addressOffset + 16;
+    } else if (addressType === 地址类型_网址) {
+      头部长度 = addressOffset + 1 + 缓存[addressOffset];
     }
     if (头部长度 < 0) {
       throw new Error("read address type failed");
     }
-    索引 = 头部长度 - 本地值177;
+    索引 = 头部长度 - bufferedLength;
     if (索引 > 0) {
-      if (结果值178.done) {
+      if (result.done) {
         throw new Error(`read address failed`);
       }
-      结果值178 = await 读取器179.readAtLeast(索引, new Uint8Array(值超文本缓冲大小));
-      if (!结果值178.value || 结果值178.value.length < 索引) {
+      result = await reader.readAtLeast(索引, new Uint8Array(值超文本缓冲大小));
+      if (!result.value || result.value.length < 索引) {
         throw new Error("read address failed");
       }
-      本地值177 += 结果值178.value.length;
-      缓存 = 拼接值8数组(缓存, 结果值178.value);
+      bufferedLength += result.value.length;
+      缓存 = concatBytes(缓存, result.value);
     }
-    let 主机名170 = "";
-    索引 = 地址值1;
-    switch (本地值171) {
+    let hostname = "";
+    索引 = addressOffset;
+    switch (addressType) {
       case 地址类型_四版:
-        主机名170 = 缓存.slice(索引, 索引 + 4).join(".");
+        hostname = 缓存.slice(索引, 索引 + 4).join(".");
         break;
       case 地址类型_网址:
-        主机名170 = new TextDecoder().decode(缓存.slice(索引 + 1, 索引 + 1 + 缓存[索引]));
+        hostname = new TextDecoder().decode(缓存.slice(索引 + 1, 索引 + 1 + 缓存[索引]));
         break;
       case 地址类型_六版:
-        主机名170 = 缓存.slice(索引, 索引 + 16).reduce((字符串值, 值2169, 值2, 甲值) => 值2 % 2 ? 字符串值.concat(((甲值[值2 - 1] << 8) + 值2169).toString(16)) : 字符串值, []).join(":");
+        hostname = 缓存.slice(索引, 索引 + 16).reduce((字符串值, byte, index, 甲值) => index % 2 ? 字符串值.concat(((甲值[index - 1] << 8) + byte).toString(16)) : 字符串值, []).join(":");
         break;
     }
-    if (主机名170.length < 1) {
+    if (hostname.length < 1) {
       throw new Error("failed to parse hostname");
     }
     const 数据 = 缓存.slice(头部长度);
     return {
-      hostname: 主机名170,
-      port: 端口172,
+      hostname,
+      port,
       data: 数据,
-      resp: new Uint8Array([本地值176, 0]),
-      reader: 读取器179,
-      done: 结果值178.done
+      resp: new Uint8Array([version, 0]),
+      reader,
+      done: result.done
     };
-  } catch (错误168) {
+  } catch (error) {
     try {
-      await 读取器179.cancel();
+      await reader.cancel();
     } catch {
     }
     try {
-      读取器179.releaseLock();
+      reader.releaseLock();
     } catch {
     }
     if (已超时) throw new DOMException("XHTTP header timeout", "TimeoutError");
-    throw 错误168;
+    throw error;
   } finally {
     clearTimeout(超时标识);
     signal?.removeEventListener("abort", abort);
   }
 }
-async function 连接值远程扩展超文本(首包, 请求值扩展, 配置快照, signal) {
+async function connectXHTTP(首包, 请求值扩展, 配置快照, signal) {
   const attempts = outboundAttempts(配置快照, 首包.hostname, 首包.port, () => 获取回退目标(
     配置快照.回退地址,
     配置快照.当前工作器地区,
@@ -4671,7 +4671,7 @@ async function 连接值远程扩展超文本(首包, 请求值扩展, 配置快
   for await (const attempt of attempts) {
     if (signal?.aborted) break;
     try {
-      const socket = await 建立出站连接(
+      const socket = await dialOutbound(
         attempt.address,
         attempt.port,
         null,
@@ -4686,40 +4686,40 @@ async function 连接值远程扩展超文本(首包, 请求值扩展, 配置快
   }
   return null;
 }
-async function 处理扩展超文本客户端(主体128, 唯一标识, 请求值扩展, 配置快照, signal) {
-  if (值值197 >= 上限值) {
+async function handleXHTTPBody(body, 唯一标识, 请求值扩展, 配置快照, signal) {
+  if (activeXHTTPConnections >= 上限值) {
     return new Response("Too many connections", {
       status: 429
     });
   }
-  值值197++;
-  let 本地值127 = false;
-  const 本地值126 = () => {
-    if (!本地值127) {
-      值值197 = Math.max(0, 值值197 - 1);
-      本地值127 = true;
+  activeXHTTPConnections++;
+  let released = false;
+  const releaseSlot = () => {
+    if (!released) {
+      activeXHTTPConnections = Math.max(0, activeXHTTPConnections - 1);
+      released = true;
     }
   };
   let 首包;
   let 已交付连接 = false;
   try {
-    首包 = await 读取扩展超文本头部(主体128, 唯一标识, signal);
-    const 远程连接 = await 连接值远程扩展超文本(首包, 请求值扩展, 配置快照, signal);
+    首包 = await readXHTTPHeader(body, 唯一标识, signal);
+    const 远程连接 = await connectXHTTP(首包, 请求值扩展, 配置快照, signal);
     if (远程连接 === null) {
       return null;
     }
-    const 连接值 = 远程连接.closed.finally(本地值126);
+    const 连接值 = 远程连接.closed.finally(releaseSlot);
     已交付连接 = true;
     return {
       readable: 远程连接.readable,
       closed: 连接值
     };
-  } catch (错误120) {
-    if (错误120.name === "TimeoutError") return new Response("XHTTP header timeout", { status: 408 });
+  } catch (error) {
+    if (error.name === "TimeoutError") return new Response("XHTTP header timeout", { status: 408 });
     return null;
   } finally {
     if (!已交付连接) {
-      本地值126();
+      releaseSlot();
       if (首包?.reader) {
         try {
           await 首包.reader.cancel();
@@ -4733,30 +4733,30 @@ async function 处理扩展超文本客户端(主体128, 唯一标识, 请求值
     }
   }
 }
-async function 处理扩展超文本值(请求119, 配置快照) {
+async function handleXHTTP(request, 配置快照) {
   try {
-    return await 处理扩展超文本客户端(请求119.body, 配置快照.认证令牌, 请求119.fetcher, 配置快照, 请求119.signal);
+    return await handleXHTTPBody(request.body, 配置快照.认证令牌, request.fetcher, 配置快照, request.signal);
   } catch {
     return null;
   }
 }
-function 处理基础64值数组(值64字符串) {
-  if (!值64字符串) return {
+function decodeEarlyData(base64) {
+  if (!base64) return {
     error: null
   };
   try {
-    值64字符串 = 值64字符串.replace(/-/g, "+").replace(/_/g, "/");
+    base64 = base64.replace(/-/g, "+").replace(/_/g, "/");
     return {
-      earlyData: Uint8Array.from(atob(值64字符串), (丙值117) => 丙值117.charCodeAt(0)).buffer,
+      earlyData: Uint8Array.from(atob(base64), (char) => char.charCodeAt(0)).buffer,
       error: null
     };
-  } catch (错误116) {
+  } catch (error) {
     return {
-      error: 错误116
+      error
     };
   }
 }
-function 关闭套接字值(套接字) {
+function closeWebSocket(套接字) {
   try {
     if (套接字.readyState === 1 || 套接字.readyState === 2) 套接字.close();
   } catch {
@@ -4814,34 +4814,34 @@ async function 获取优选接口(网址列表, 默认端口 = "443", 超时 = 3
       } catch {
         return;
       }
-      const 行列表 = 文本.trim().split("\n").map((行值14) => 行值14.trim()).filter((行值) => 行值);
+      const 行列表 = 文本.trim().split("\n").map((line) => line.trim()).filter((行值) => 行值);
       const 是否值 = 行列表.length > 1 && 行列表[0].includes(",");
       const 六版地址模式 = /^[^\[\]]*:[^\[\]]*:[^\[\]]/;
       if (!是否值) {
-        行列表.forEach((行13) => {
-          const 井号索引 = 行13.indexOf("#");
-          const [主机部分, 备注] = 井号索引 > -1 ? [行13.substring(0, 井号索引), 行13.substring(井号索引)] : [行13, ""];
+        行列表.forEach((line) => {
+          const 井号索引 = line.indexOf("#");
+          const [主机部分, 备注] = 井号索引 > -1 ? [line.substring(0, 井号索引), line.substring(井号索引)] : [line, ""];
           const { address, port } = parseAddress(主机部分);
           const host = address.includes(":") ? `[${address}]` : address;
-          const 端口12 = new URL(网址).searchParams.get("port") || 默认端口;
-          结果列表.add(`${host}:${port || 端口12}${备注}`);
+          const defaultPort = new URL(网址).searchParams.get("port") || 默认端口;
+          结果列表.add(`${host}:${port || defaultPort}${备注}`);
         });
       } else {
-        const 头部列表 = 行列表[0].split(",").map((头值11) => 头值11.trim());
+        const 头部列表 = 行列表[0].split(",").map((column) => column.trim());
         const 数据行列表 = 行列表.slice(1);
         if (头部列表.includes("IP地址") && 头部列表.includes("端口") && 头部列表.includes("数据中心")) {
-          const 地址索引10 = 头部列表.indexOf("IP地址"), 端口索引 = 头部列表.indexOf("端口");
+          const ipIndex = 头部列表.indexOf("IP地址"), 端口索引 = 头部列表.indexOf("端口");
           const 备注索引 = 头部列表.indexOf("国家") > -1 ? 头部列表.indexOf("国家") : 头部列表.indexOf("城市") > -1 ? 头部列表.indexOf("城市") : 头部列表.indexOf("数据中心");
           const 传输层安全索引 = 头部列表.indexOf("TLS");
-          数据行列表.forEach((行9) => {
-            const 列列表8 = 行9.split(",").map((丙值7) => 丙值7.trim());
-            if (传输层安全索引 !== -1 && 列列表8[传输层安全索引]?.toLowerCase() !== "true") return;
-            const 包裹地址6 = 六版地址模式.test(列列表8[地址索引10]) ? `[${列列表8[地址索引10]}]` : 列列表8[地址索引10];
-            结果列表.add(`${包裹地址6}:${列列表8[端口索引]}#${列列表8[备注索引]}`);
+          数据行列表.forEach((line) => {
+            const columns = line.split(",").map((column) => column.trim());
+            if (传输层安全索引 !== -1 && columns[传输层安全索引]?.toLowerCase() !== "true") return;
+            const host = 六版地址模式.test(columns[ipIndex]) ? `[${columns[ipIndex]}]` : columns[ipIndex];
+            结果列表.add(`${host}:${columns[端口索引]}#${columns[备注索引]}`);
           });
-        } else if (头部列表.some((头值5) => 头值5.includes("IP")) && 头部列表.some((头值4) => 头值4.includes("延迟")) && 头部列表.some((头值3) => 头值3.includes("下载速度"))) {
-          const 地址索引 = 头部列表.findIndex((头值2) => 头值2.includes("IP"));
-          const 延迟索引 = 头部列表.findIndex((头值1) => 头值1.includes("延迟"));
+        } else if (头部列表.some((column) => column.includes("IP")) && 头部列表.some((column) => column.includes("延迟")) && 头部列表.some((column) => column.includes("下载速度"))) {
+          const 地址索引 = 头部列表.findIndex((column) => column.includes("IP"));
+          const 延迟索引 = 头部列表.findIndex((column) => column.includes("延迟"));
           const 速度索引 = 头部列表.findIndex((头值) => 头值.includes("下载速度"));
           const 端口 = new URL(网址).searchParams.get("port") || 默认端口;
           数据行列表.forEach((行) => {
