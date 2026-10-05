@@ -3025,12 +3025,7 @@ var 直连域名列表 = [
   "cf.877771.xyz",
   "xn--b6gac.eu.org"
 ];
-var 错误_无效数据 = "invalid data";
-var 错误_无效用户 = "invalid user";
-var 错误_不支持命令 = "command is not supported";
 var 错误_仅支持域名系统用户数据报 = "UDP proxy only enable for DNS which is port 53";
-var 错误_无效地址类型 = "invalid addressType";
-var 错误_空地址 = "addressValue is empty";
 var 错误_网页套接字未打开 = "webSocket.eadyState is not open";
 var 错误_代理无可用方法 = "no acceptable methods";
 var 错误_代理需要认证 = "socks server needs auth";
@@ -3859,31 +3854,19 @@ function 处理值唯一标识(字节301, 偏移300, 令牌299) {
 }
 function 解析网页套接字值头部(块297, 令牌) {
   const 字节296 = 处理值值8数组(块297);
-  if (字节296.byteLength < 24) return {
-    hasError: true,
-    message: 错误_无效数据
-  };
+  if (字节296.byteLength < 24) return { hasError: true };
   const 本地值295 = 字节296.subarray(0, 1);
-  if (!处理值唯一标识(字节296, 1, 令牌)) return {
-    hasError: true,
-    message: 错误_无效用户
-  };
+  if (!处理值唯一标识(字节296, 1, 令牌)) return { hasError: true };
   const 值长度294 = 字节296[17];
   const 命令索引 = 18 + 值长度294;
-  if (字节296.byteLength < 命令索引 + 5) return {
-    hasError: true,
-    message: 错误_无效数据
-  };
+  if (字节296.byteLength < 命令索引 + 5) return { hasError: true };
   const 命令293 = 字节296[命令索引];
   let 是否用户数据报 = false;
   if (命令293 === 1) {
   } else if (命令293 === 2) {
     是否用户数据报 = true;
   } else {
-    return {
-      hasError: true,
-      message: 错误_不支持命令
-    };
+    return { hasError: true };
   }
   const 端口索引292 = 19 + 值长度294;
   const 端口291 = 字节296[端口索引292] << 8 | 字节296[端口索引292 + 1];
@@ -3892,45 +3875,27 @@ function 解析网页套接字值头部(块297, 令牌) {
   switch (地址类型287) {
     case 地址类型_四版:
       地址长度289 = 4;
-      if (字节296.byteLength < 地址值索引 + 地址长度289) return {
-        hasError: true,
-        message: 错误_无效数据
-      };
+      if (字节296.byteLength < 地址值索引 + 地址长度289) return { hasError: true };
       主机名288 = `${字节296[地址值索引]}.${字节296[地址值索引 + 1]}.${字节296[地址值索引 + 2]}.${字节296[地址值索引 + 3]}`;
       break;
     case 地址类型_网址:
-      if (字节296.byteLength < 地址值索引 + 1) return {
-        hasError: true,
-        message: 错误_无效数据
-      };
+      if (字节296.byteLength < 地址值索引 + 1) return { hasError: true };
       地址长度289 = 字节296[地址值索引++];
-      if (字节296.byteLength < 地址值索引 + 地址长度289) return {
-        hasError: true,
-        message: 错误_无效数据
-      };
+      if (字节296.byteLength < 地址值索引 + 地址长度289) return { hasError: true };
       主机名288 = 共享解码器.decode(字节296.subarray(地址值索引, 地址值索引 + 地址长度289));
       break;
     case 地址类型_六版:
       地址长度289 = 16;
-      if (字节296.byteLength < 地址值索引 + 地址长度289) return {
-        hasError: true,
-        message: 错误_无效数据
-      };
+      if (字节296.byteLength < 地址值索引 + 地址长度289) return { hasError: true };
       const 值6286 = [];
       const 值6视图 = new DataView(字节296.buffer, 字节296.byteOffset + 地址值索引, 地址长度289);
       for (let 索引值285 = 0; 索引值285 < 8; 索引值285++) 值6286.push(值6视图.getUint16(索引值285 * 2).toString(16));
       主机名288 = 值6286.join(":");
       break;
     default:
-      return {
-        hasError: true,
-        message: `${错误_无效地址类型}: ${地址类型287}`
-      };
+      return { hasError: true };
   }
-  if (!主机名288) return {
-    hasError: true,
-    message: `${错误_空地址}: ${地址类型287}`
-  };
+  if (!主机名288) return { hasError: true };
   return {
     hasError: false,
     port: 端口291,
@@ -4252,39 +4217,24 @@ async function 解析木马头部(缓冲234, 本地值233, 传输路径 = "") {
   const 密码值井号 = 传输路径 || 本地值233;
   const 值224密码 = await 处理值224井号(密码值井号);
   if (字节.byteLength < 56) {
-    return {
-      hasError: true,
-      message: "invalid trojan data - too short"
-    };
+    return { hasError: true };
   }
   let 值值索引 = 56;
   if (字节[56] !== 13 || 字节[57] !== 10) {
-    return {
-      hasError: true,
-      message: "invalid trojan header format (missing CR LF)"
-    };
+    return { hasError: true };
   }
   const 密码232 = 共享解码器.decode(字节.subarray(0, 值值索引));
   if (密码232 !== 值224密码) {
-    return {
-      hasError: true,
-      message: "invalid trojan password"
-    };
+    return { hasError: true };
   }
   const 代理5数据缓冲 = 字节.subarray(值值索引 + 2);
   if (代理5数据缓冲.byteLength < 6) {
-    return {
-      hasError: true,
-      message: "invalid SOCKS5 request data"
-    };
+    return { hasError: true };
   }
   const 视图231 = new DataView(代理5数据缓冲.buffer, 代理5数据缓冲.byteOffset, 代理5数据缓冲.byteLength);
   const 命令230 = 视图231.getUint8(0);
   if (命令230 !== 1) {
-    return {
-      hasError: true,
-      message: "unsupported command, only TCP (CONNECT) is allowed"
-    };
+    return { hasError: true };
   }
   const 本地值229 = 视图231.getUint8(1);
   let 地址长度 = 0;
@@ -4310,16 +4260,10 @@ async function 解析木马头部(缓冲234, 本地值233, 传输路径 = "") {
       地址227 = 值6.join(":");
       break;
     default:
-      return {
-        hasError: true,
-        message: `invalid addressType is ${本地值229}`
-      };
+      return { hasError: true };
   }
   if (!地址227) {
-    return {
-      hasError: true,
-      message: `address is empty, addressType is ${本地值229}`
-    };
+    return { hasError: true };
   }
   const 端口索引225 = 地址索引228 + 地址长度;
   const 端口远程 = new DataView(代理5数据缓冲.buffer, 代理5数据缓冲.byteOffset + 端口索引225, 2).getUint16(0);

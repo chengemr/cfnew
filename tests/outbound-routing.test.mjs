@@ -222,3 +222,41 @@ test('WebSocket first-byte timeout in only-proxy mode never opens a direct conne
   assert.deepEqual(result.attempts, [['proxy', primary, 443]]);
   assert.equal(timers.pending.size, 0);
 });
+
+const malformedPackets = {
+  vless: {
+    'wrong UUID': bytes => { bytes[1] ^= 255; return bytes; },
+    'overrun options': bytes => { bytes[17] = 255; return bytes; },
+    'unsupported command': bytes => { bytes[18] = 3; return bytes; },
+    'unsupported address type': bytes => { bytes[21] = 9; return bytes; },
+    'truncated IPv4': bytes => bytes.slice(0, 24),
+    'truncated domain': bytes => Uint8Array.of(...bytes.slice(0, 21), 2, 3, 65),
+    'empty domain': bytes => Uint8Array.of(...bytes.slice(0, 21), 2, 0, 0),
+    'truncated IPv6': bytes => Uint8Array.of(...bytes.slice(0, 21), 3, 0, 0)
+  },
+  trojan: {
+    'wrong password hash': bytes => { bytes[0] ^= 1; return bytes; },
+    'missing CRLF': bytes => { bytes[56] = 0; return bytes; },
+    'truncated request': bytes => bytes.slice(0, 63),
+    'unsupported command': bytes => { bytes[58] = 3; return bytes; },
+    'unsupported address type': bytes => { bytes[59] = 2; return bytes; },
+    'empty domain': bytes => Uint8Array.of(...bytes.slice(0, 59), 3, 0, 1, 187, 13, 10, ...payload),
+    'truncated IPv6': bytes => Uint8Array.of(...bytes.slice(0, 59), 4, 0, 0, 0, 0),
+    'missing port': bytes => bytes.slice(0, 64)
+  }
+};
+for (const [transport, cases] of Object.entries(malformedPackets)) {
+  for (const [name, malformed] of Object.entries(cases)) {
+    test(`${transport}: ${name} closes the connection without dialing`, async t => {
+      const runtime = websocketRuntime();
+      const { worker } = await loadWorker(t, { globals: runtime.globals });
+      await worker.fetch(new Request(ORIGIN, { headers: { Upgrade: 'websocket' } }),
+        environment({ ev: transport === 'vless' ? 'yes' : 'no', et: transport === 'trojan' ? 'yes' : 'no' }),
+        { waitUntil() {} });
+      const websocket = runtime.pairs[0][1];
+      websocket.receive(malformed(packet(transport)));
+      for (let i = 0; i < 5; i++) await flush();
+      assert.equal(websocket.readyState, 3);
+    });
+  }
+}
