@@ -377,44 +377,6 @@ export default {
   }
 };
 
-// 解析分享链接并生成客户端节点配置
-
-// ============================================================
-// 内部格式转换器 - 不依赖外部服务
-// ============================================================
-
-// 用于 YAML 引号包裹（避免 IPv6 方括号、逗号等被解析为数组）
-
-// URL.hostname 对 IPv6 会带方括号，直接写入 YAML 会被当成数组
-
-// 圈类客户端策略组列表：策略组 + 全部节点
-
-// 解析任意分享链接为通用节点对象
-
-// 单个节点 → 块级 YAML（避免 flow style 解析错误）
-
-// 内部生成 YAML（完整规则集，远端 rule-providers）
-
-// 内部生成 JSON 客户端配置（完整规则集：远端镜像）
-// 新版内核要把 DNS 地址拆成 type + server + path，这里按 URL 协议归一
-
-// 规则源（CDN：jsDelivr 镜像 GitHub）
-
-// 内部生成 ini 客户端配置（完整规则集）
-
-// 内部生成另一类 ini 客户端配置
-
-// 内部生成圈叉配置（完整远端 filter 资源）
-
-// 兼容旧调用名
-
-// 全局变量存储ECH调试信息
-
-// ======================= 家宽链式（住宅宽带当落地） =======================
-// 跟之前的套娃一个思路：cfnew 自己的节点在前面带路，落地换成网友共享出来的家庭宽带。
-// 客户端会把落地节点的整条隧道塞进前置节点里走，握手走 CF 边缘，出网是住宅 IP。
-// 内核要 1.19.25 以上才认这类节点，老内核导入会报类型不认识。
-
 async function 处理订阅请求(settings, 请求507, 用户506, 网址505 = null) {
   if (!网址505) 网址505 = new URL(请求507.url);
   const 最终链接列表 = [];
@@ -582,16 +544,7 @@ async function 处理订阅请求(settings, 请求507, 用户506, 网址505 = nu
       break;
     case atob('cXVhbnR1bXVsdA=='):
     case atob('cXVhbng='):
-    case 解码64('cXVhbng='):
       订阅内容 = generateQuantumultX(最终链接列表, { dns: settings.自定义域名系统 });
-      内容类型483 = 'text/plain; charset=utf-8';
-      break;
-    case atob('c3M='):
-    case atob('c3Ny'):
-      订阅内容 = btoa(最终链接列表.join('\n'));
-      break;
-    case atob('djJyYXk='):
-      订阅内容 = btoa(最终链接列表.join('\n'));
       break;
     case atob('bG9vbg=='):
       订阅内容 = generateLoon(最终链接列表, { dns: settings.自定义域名系统 });
@@ -599,7 +552,6 @@ async function 处理订阅请求(settings, 请求507, 用户506, 网址505 = nu
       break;
     case atob('c2luZ2JveA=='):
     case 解码64('c2luZy1ib3g='):
-    case 解码64('c2luZ2JveA=='):
       订阅内容 = generateSingBox(最终链接列表, { dns: settings.自定义域名系统 });
       内容类型483 = 'application/json; charset=utf-8';
       break;
@@ -794,7 +746,6 @@ async function 处理网页套接字请求(请求417, 配置快照) {
           if (!轻量协议结果.hasError) {
             协议类型 = 解码64('dmxlc3M=');
             const {
-              addressType: 地址类型395,
               port: 端口394,
               hostname: 主机名393,
               rawIndex: 原始索引,
@@ -807,7 +758,7 @@ async function 处理网页套接字请求(请求417, 配置快照) {
             const 值头部390 = new Uint8Array([本地值392[0], 0]);
             const 原始数据389 = 数据396.subarray(原始索引);
             if (是否域名系统值) return 处理值用户数据报(原始数据389, 值值410, 值头部390, 请求值407);
-            await 处理值值384(地址类型395, 主机名393, 端口394, 原始数据389, 值值410, 值头部390, 远程连接值409, 请求回退416, 实际地区411, 请求值414, 请求代理配置413, 请求值407, 配置快照);
+            await 处理值值384(主机名393, 端口394, 原始数据389, 值值410, 值头部390, 远程连接值409, 请求回退416, 实际地区411, 请求值414, 请求代理配置413, 请求值407, 配置快照);
             return;
           }
         }
@@ -816,12 +767,11 @@ async function 处理网页套接字请求(请求417, 配置快照) {
           if (!值结果.hasError) {
             协议类型 = atob('dHJvamFu');
             const {
-              addressType: 地址类型388,
               port: 端口387,
               hostname: 主机名386,
               rawClientData: 原始客户端数据
             } = 值结果;
-            await 处理值值384(地址类型388, 主机名386, 端口387, 原始客户端数据, 值值410, null, 远程连接值409, 请求回退416, 实际地区411, 请求值414, 请求代理配置413, 请求值407, 配置快照);
+            await 处理值值384(主机名386, 端口387, 原始客户端数据, 值值410, null, 远程连接值409, 请求回退416, 实际地区411, 请求值414, 请求代理配置413, 请求值407, 配置快照);
             return;
           }
         }
@@ -836,7 +786,7 @@ async function 处理网页套接字请求(请求417, 配置快照) {
     webSocket: 客户端值
   });
 }
-async function 处理值值384(地址类型383, 主机, 端口数字, 原始数据, 网页套接字382, 值头部381, 远程连接值, 请求回退 = '', 请求地区 = '', 请求值380 = null, 请求代理配置 = null, 请求值379 = null, 配置快照) {
+async function 处理值值384(主机, 端口数字, 原始数据, 网页套接字382, 值头部381, 远程连接值, 请求回退 = '', 请求地区 = '', 请求值380 = null, 请求代理配置 = null, 请求值379 = null, 配置快照) {
   const { 回退地址, 当前工作器地区, 启用地区匹配, 已解析代理5配置, 是否代理已启用, 仅走代理, 启用代理降级 } = 配置快照;
   // 优先使用客户端path参数，其次回退到全局配置
   const 实际回退 = 请求回退 || 回退地址;
@@ -851,7 +801,7 @@ async function 处理值值384(地址类型383, 主机, 端口数字, 原始数�
   const 值数据378 = 处理值值8数组(原始数据);
   async function 连接值发送(地址377, 端口376, 值代理 = false) {
     // 走代理时首包交给握手函数在释放写入器前发出，避免换写入器导致连接被重置
-    const 远程值375 = 值代理 ? await 处理值代理连接(地址类型383, 地址377, 端口376, 实际代理配置, 请求值379, 值数据378) : await 连接值套接字(地址377, 端口376, 请求值379, 传输连接竞速数);
+    const 远程值375 = 值代理 ? await 处理值代理连接(地址377, 端口376, 实际代理配置, 请求值379, 值数据378) : await 连接值套接字(地址377, 端口376, 请求值379, 传输连接竞速数);
     const 写入器374 = 远程值375.writable.getWriter();
     if (!值代理 && 值数据378.byteLength) await 写入器374.write(值数据378);
     return {
@@ -1241,7 +1191,6 @@ function 解析网页套接字值头部(块297, 令牌) {
   };
   return {
     hasError: false,
-    addressType: 地址类型287,
     port: 端口291,
     hostname: 主机名288,
     isUDP: 是否用户数据报,
@@ -1362,7 +1311,7 @@ async function 处理值用户数据报(用户数据报块, 网页套接字, 值
     await 连接值279(值套接字, 网页套接字, 头部, null);
   } catch (错误263) {}
 }
-async function 处理值代理连接(地址类型, 地址262, 端口261, 代理配置, 请求值258 = null, 首包数据 = null) {
+async function 处理值代理连接(地址262, 端口261, 代理配置, 请求值258 = null, 首包数据 = null) {
   // 按代理种类分派：隧道走建隧请求，其余保持套接字5 握手
   if (代理配置 && (代理配置.kind === 代理种类_隧道 || 代理配置.kind === 代理种类_安全隧道)) {
     return 处理值隧道连接(地址262, 端口261, 代理配置, 请求值258, 首包数据);
@@ -1637,8 +1586,6 @@ async function 解析木马头部(缓冲234, 本地值233, 传输路径 = '') {
   const 端口远程 = new DataView(代理5数据缓冲.buffer, 代理5数据缓冲.byteOffset + 端口索引225, 2).getUint16(0);
   return {
     hasError: false,
-    addressRemote: 地址227,
-    addressType: 本地值229,
     port: 端口远程,
     hostname: 地址227,
     rawClientData: 代理5数据缓冲.subarray(端口索引225 + 4)
@@ -1847,10 +1794,6 @@ async function 读取扩展超文本头部(本地值180, 唯一标识字符串) 
   }
 }
 
-// 用一个远程套接字装配上下行器：uploader 负责写 vless 首包与后续上行，downloader 回灌 resp+下行
-function 装配扩展超文本连接(首包, 远程套接字) {
-  return createXHTTPRelay(首包, 远程套接字);
-}
 // 出站决策与 ws 的 处理值值384 对齐：接入 s（代理）、wk/rm（地区匹配备用地址）、qj（代理降级/仅走代理）
 async function 连接值远程扩展超文本(首包, 请求值扩展 = null, 配置快照) {
   const { 回退地址, 当前工作器地区, 启用地区匹配, 已解析代理5配置, 是否代理已启用, 仅走代理, 启用代理降级 } = 配置快照;
@@ -1858,7 +1801,7 @@ async function 连接值远程扩展超文本(首包, 请求值扩展 = null, �
   const 主机 = 首包.hostname;
   const 端口 = 首包.port;
   const 直连 = async (地址, 端口值) => 连接值套接字(地址, 端口值, 请求值扩展, 传输连接竞速数);
-  const 走代理 = async (地址, 端口值) => 处理值代理连接(地址类型_网址, 地址, 端口值, 已解析代理5配置, 请求值扩展, null);
+  const 走代理 = async (地址, 端口值) => 处理值代理连接(地址, 端口值, 已解析代理5配置, 请求值扩展, null);
   // 计算回退目标：优先 p（回退地址），否则按 wk/rm 取地区匹配备用地址
   const 取回退目标 = async () => {
     if (回退地址 && 回退地址.trim()) {
@@ -1880,7 +1823,7 @@ async function 连接值远程扩展超文本(首包, 请求值扩展 = null, �
   const 首跳走代理 = 仅走代理 && 是否代理已启用 ? true : 启用代理降级 ? false : 是否代理已启用;
   try {
     const 套接字 = 首跳走代理 ? await 走代理(主机, 端口) : await 直连(主机, 端口);
-    return 装配扩展超文本连接(首包, 套接字);
+    return createXHTTPRelay(首包, 套接字);
   } catch (首跳错误) {
     // 只走代理：首跳失败不回落直连，避免出口 IP 泄漏
     if (仅走代理 && 是否代理已启用) return null;
@@ -1888,16 +1831,16 @@ async function 连接值远程扩展超文本(首包, 请求值扩展 = null, �
       if (启用代理降级 && 是否代理已启用) {
         try {
           const 代理套接字 = await 走代理(主机, 端口);
-          return 装配扩展超文本连接(首包, 代理套接字);
+          return createXHTTPRelay(首包, 代理套接字);
         } catch (代理错误) {
           const 回退 = await 取回退目标();
           const 回退套接字 = await 直连(回退.address, 回退.port);
-          return 装配扩展超文本连接(首包, 回退套接字);
+          return createXHTTPRelay(首包, 回退套接字);
         }
       }
       const 回退 = await 取回退目标();
       const 回退套接字 = 是否代理已启用 ? await 走代理(回退.address, 回退.port) : await 直连(回退.address, 回退.port);
-      return 装配扩展超文本连接(首包, 回退套接字);
+      return createXHTTPRelay(首包, 回退套接字);
     } catch (回退错误) {
       return null;
     }

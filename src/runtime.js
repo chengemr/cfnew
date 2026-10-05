@@ -24,7 +24,6 @@ export function createSettings(env, stored) {
     启用木马: config.et === 'yes',
     启用扩展传输: config.ex === 'yes',
     传输路径: config.tp || '',
-    订阅转换接口: config.scu || defaults.scu,
     启用优选域名: config.epd === 'yes',
     启用优选地址: config.epi === 'yes',
     启用仓库优选: config.egi === 'yes',
