@@ -20,7 +20,8 @@ export function validateConfig(changes) {
     if (typeof value !== 'string') return key + ' 必须是字符串';
     if (key === 'qj' && !['no', 'only'].includes(value.toLowerCase())) return '无效的出站方式';
     if (key === 'alpn' && !alpnValues.has(value.trim())) return '无效的 ALPN';
-    if (['homepage', 'yxURL', 'customDNS', 'scu'].includes(key)) {
+    // DNS also supports TLS, QUIC, UDP, bare hosts and IPv6; keep their formats.
+    if (['homepage', 'yxURL', 'scu'].includes(key)) {
       try { if (!['http:', 'https:'].includes(new URL(value).protocol)) return key + ' 仅支持 HTTP(S)'; }
       catch { return key + ' 必须是完整 URL'; }
     }
