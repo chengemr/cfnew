@@ -2,6 +2,13 @@ import { defaults, resolveConfig } from './config.js';
 import { parsePreferredSources } from './preferred.js';
 import { parseProxy } from './transports/proxy.js';
 
+export function getAuthenticationToken(env) {
+  const token = env.u || env.U;
+  if (typeof token !== 'string') return null;
+  const normalized = token.trim().toLowerCase();
+  return /^(?:[0-9a-f]{32}|[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})$/.test(normalized) ? normalized : null;
+}
+
 export function createSettings(env, stored) {
   const config = Object.freeze(resolveConfig(env, stored));
   const { addresses, domains } = parsePreferredSources(config.yx);
@@ -16,7 +23,7 @@ export function createSettings(env, stored) {
   }
   return Object.freeze({
     config,
-    认证令牌: String(env.u || env.U || '351c9981-04b6-4103-aa4b-864aa9c91469').toLowerCase(),
+    认证令牌: getAuthenticationToken(env),
     手动工作器地区: region,
     当前工作器地区: region || (fallback ? 'CUSTOM' : 'CF'),
     启用地区匹配: String(config.rm || '').toLowerCase() !== 'no',

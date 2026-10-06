@@ -41,6 +41,8 @@ for (const proxy of ['socks5://user:pass@proxy.example:1080', 'http://user:pass@
       reader.releaseLock();
       socket.close();
       await Promise.allSettled(tasks);
+      assert.equal(socket.readable.locked, false, 'proxy response reader must be released after cancellation');
+      assert.equal(socket.writable.locked, false, 'proxy upload writer must be released after cancellation');
     });
     assert.deepEqual([...((await reader.read()).value)], [0, 0]);
     assert.deepEqual([...((await reader.read()).value)], [42, 43]);
@@ -59,3 +61,23 @@ for (const proxy of ['socks5://user:pass@proxy.example:1080', 'http://user:pass@
     }
   });
 }
+
+test('HTTP Basic retains the existing Latin-1 encoding for previously supported credentials', async t => {
+  let incoming, end;
+  const writes = [], tasks = [];
+  const socket = {
+    opened: Promise.resolve(), closed: new Promise(resolve => { end = resolve; }),
+    readable: new ReadableStream({ start(controller) { incoming = controller; } }),
+    writable: new WritableStream({ write(data) {
+      writes.push(data.slice());
+      incoming.enqueue(new TextEncoder().encode('HTTP/1.1 200 OK\r\n\r\n'));
+    } }),
+    close() { try { incoming.close(); } catch {} end(); }
+  };
+  const { worker } = await loadWorker(t, { connect: () => socket });
+  const response = await worker.fetch(xhttpRequest(), environment({ qj: 'only', s: 'http://café:päss@proxy.example:8080' }),
+    { waitUntil(task) { tasks.push(task); } });
+  t.after(async () => { await response.body?.cancel(); socket.close(); await Promise.allSettled(tasks); });
+  assert.equal(response.status, 200);
+  assert.ok(new TextDecoder().decode(writes[0]).includes(`Proxy-Authorization: Basic ${btoa('café:päss')}\r\n`));
+});

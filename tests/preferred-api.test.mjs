@@ -73,7 +73,7 @@ test('preferred API rejects IPv6 URL suffixes without changing stored nodes', as
   const env = environment({ C });
   const response = await request(worker, env, path, { method: 'POST',
     body: JSON.stringify(['2001:db8::1]/evil', '2001:db8::1]?evil', '2001:db8::1]#evil'].map(ip => ({ ip }))) });
-  assert.equal(response.status, 200);
+  assert.equal(response.status, 400);
   const result = await response.json();
   assert.equal(result.success, false);
   assert.equal(result.added, 0);
@@ -109,7 +109,7 @@ test('preferred API rejects invalid ports without altering configuration', async
   const ports = [0, -1, 65536, 1.5, '8443garbage', '1e3', true, {}];
   const response = await request(worker, env, path, { method: 'POST',
     body: JSON.stringify(ports.map(port => ({ ip: 'example.com', port }))) });
-  assert.equal(response.status, 200);
+  assert.equal(response.status, 400);
   const result = await response.json();
   assert.equal(result.success, false);
   assert.equal(result.added, 0);
