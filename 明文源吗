@@ -888,6 +888,9 @@ var 传输下载延迟 = 0;
 var 传输上传包大小 = 16 * 1024;
 var 传输上传队列上限 = 256 * 1024;
 var 首字节超时 = 3500;
+var 认证超时 = 5e3;
+var DNS响应超时 = 5e3;
+var DNS空闲超时 = 45e3;
 var activeXHTTPConnections = 0;
 var 上限值 = 32;
 async function handleWebSocket(request, 配置快照) {
@@ -912,15 +915,18 @@ async function handleWebSocket(request, 配置快照) {
   let remote = {
     socket: null,
     writer: null,
-    drainUpload: null
+    drainUpload: null,
+    close: 关闭传输
   };
   let 是否域名系统值 = false;
   let 协议类型 = null;
   let drainingUpload = false;
   let 传输值 = false;
+  let pendingBytes = 0;
   const 值队列 = createUploadQueue(传输上传包大小, 传输上传队列上限, 传输上传队列上限 >> 8);
   const fetcher = request.fetcher;
   const 连接取消 = new AbortController();
+  const authenticationTimer = setTimeout(关闭传输, 认证超时);
   const 出站配置 = {
     ...配置快照,
     已解析代理5配置: queryProxy || 配置快照.已解析代理5配置,
@@ -939,6 +945,8 @@ async function handleWebSocket(request, 配置快照) {
   function 关闭传输() {
     if (传输值) return;
     传输值 = true;
+    clearTimeout(authenticationTimer);
+    pendingBytes = 0;
     连接取消.abort();
     值队列.clear();
     处理值远程写入器();
@@ -946,6 +954,23 @@ async function handleWebSocket(request, 配置快照) {
   }
   websocket.addEventListener("close", 关闭传输);
   websocket.addEventListener("error", 关闭传输);
+  function reserveInput(data) {
+    if (传输值) return false;
+    if (pendingBytes + data.byteLength > 传输上传队列上限) {
+      关闭传输();
+      return false;
+    }
+    pendingBytes += data.byteLength;
+    return true;
+  }
+  function releaseInput(bytes) {
+    pendingBytes = Math.max(0, pendingBytes - bytes);
+  }
+  function authenticated(protocol, headerBytes) {
+    协议类型 = protocol;
+    clearTimeout(authenticationTimer);
+    releaseInput(headerBytes);
+  }
   function 处理队列值(chunk) {
     const data = asBytes(chunk);
     if (!data.byteLength) return true;
@@ -964,7 +989,9 @@ async function handleWebSocket(request, 配置快照) {
         if (传输值 || !remote.writer) break;
         const data = 值队列.bundle();
         if (!data) break;
+        remote.onUpload?.(data);
         await remote.writer.write(data);
+        releaseInput(data.byteLength);
       }
     } catch {
       关闭传输();
@@ -977,7 +1004,7 @@ async function handleWebSocket(request, 配置快照) {
     if (!drainingUpload && !值队列.empty && remote.writer) queueMicrotask(drainUpload);
   };
   const earlyDataHeader = request.headers.get("sec-websocket-protocol") || "";
-  const inbound = webSocketReadable(websocket, earlyDataHeader);
+  const inbound = webSocketReadable(websocket, earlyDataHeader, reserveInput, 连接取消.signal);
   inbound.pipeTo(new WritableStream({
     close() {
       关闭传输();
@@ -988,7 +1015,6 @@ async function handleWebSocket(request, 配置快照) {
     async write(chunk) {
       if (传输值) return;
       const data = asBytes(chunk);
-      if (是否域名系统值) return await forwardDNS(data, websocket, null, fetcher, 出站配置, 连接取消.signal);
       if (remote.socket && remote.writer) {
         if (!处理队列值(data)) throw new Error("upload queue overflow");
         return;
@@ -1000,7 +1026,6 @@ async function handleWebSocket(request, 配置快照) {
       if (启用明文 && data.byteLength >= 24) {
         const 轻量协议结果 = parseVlessHeader(data, 认证令牌);
         if (!轻量协议结果.hasError) {
-          协议类型 = "vless";
           const {
             port,
             hostname,
@@ -1014,21 +1039,34 @@ async function handleWebSocket(request, 配置快照) {
           }
           const responseHeader = new Uint8Array([version[0], 0]);
           const payload = data.subarray(原始索引);
-          if (是否域名系统值) return forwardDNS(payload, websocket, responseHeader, fetcher, 出站配置, 连接取消.signal);
-          await connectWebSocketTCP(hostname, port, payload, websocket, responseHeader, remote, fetcher, 出站配置, 连接取消.signal);
+          authenticated("vless", 原始索引);
+          try {
+            if (是否域名系统值) {
+              await forwardDNS(payload, websocket, responseHeader, remote, fetcher, 出站配置, 连接取消.signal);
+            } else {
+              await connectWebSocketTCP(hostname, port, payload, websocket, responseHeader, remote, fetcher, 出站配置, 连接取消.signal);
+            }
+          } finally {
+            releaseInput(payload.byteLength);
+          }
           return;
         }
       }
       if (启用木马 && data.byteLength >= 56) {
         const 值结果 = await parseTrojanHeader(data, 认证令牌, 传输路径);
+        if (传输值) return;
         if (!值结果.hasError) {
-          协议类型 = "trojan";
           const {
             port,
             hostname,
             rawClientData: 原始客户端数据
           } = 值结果;
-          await connectWebSocketTCP(hostname, port, 原始客户端数据, websocket, null, remote, fetcher, 出站配置, 连接取消.signal);
+          authenticated("trojan", data.byteLength - 原始客户端数据.byteLength);
+          try {
+            await connectWebSocketTCP(hostname, port, 原始客户端数据, websocket, null, remote, fetcher, 出站配置, 连接取消.signal);
+          } finally {
+            releaseInput(原始客户端数据.byteLength);
+          }
           return;
         }
       }
@@ -1240,29 +1278,54 @@ function createDownloadBatcher(websocket) {
     flush: 刷新
   };
 }
-function webSocketReadable(websocket, 值数据头部) {
+function webSocketReadable(websocket, 值数据头部, reserveInput, signal) {
   let cancelled = false;
+  let detach = () => {
+  };
   return new ReadableStream({
     start(controller) {
-      websocket.addEventListener("message", (事件) => {
-        if (!cancelled) controller.enqueue(asBytes(事件.data));
-      });
-      websocket.addEventListener("close", () => {
-        if (!cancelled) {
-          closeWebSocket(websocket);
-          controller.close();
+      const finish = (error2) => {
+        if (cancelled) return;
+        detach();
+        if (error2) controller.error(error2);
+        else controller.close();
+      };
+      const enqueue = (chunk) => {
+        if (cancelled) return;
+        const data = asBytes(chunk);
+        if (reserveInput(data) && !cancelled) controller.enqueue(data);
+      };
+      const message = (event) => {
+        try {
+          enqueue(event.data);
+        } catch (error2) {
+          finish(error2);
         }
-      });
-      websocket.addEventListener("error", (error2) => controller.error(error2));
+      };
+      const closed = () => finish();
+      const failed = (event) => finish(event.error || new Error("WebSocket error"));
+      const aborted = () => finish(signal.reason);
+      detach = () => {
+        cancelled = true;
+        websocket.removeEventListener("message", message);
+        websocket.removeEventListener("close", closed);
+        websocket.removeEventListener("error", failed);
+        signal.removeEventListener("abort", aborted);
+      };
+      websocket.addEventListener("message", message);
+      websocket.addEventListener("close", closed);
+      websocket.addEventListener("error", failed);
+      signal.addEventListener("abort", aborted, { once: true });
+      if (signal.aborted) return aborted();
       const {
         earlyData: 值数据,
         error
       } = decodeEarlyData(值数据头部);
-      if (error) controller.error(error);
-      else if (值数据) controller.enqueue(asBytes(值数据));
+      if (error) finish(error);
+      else if (值数据) enqueue(值数据);
     },
     cancel() {
-      cancelled = true;
+      detach();
       closeWebSocket(websocket);
     }
   });
@@ -1342,7 +1405,84 @@ async function relayToWebSocket(远程套接字, websocket, 头部数据, 重试
   }
   if (!是否有数据 && !failedOrRetried && 重试值) 重试值();
 }
-async function forwardDNS(用户数据报块, 网页套接字, 值头部, 请求值, 配置快照, signal) {
+function dnsFrameCounter() {
+  let prefixBytes = 0, length = 0, remaining = 0;
+  return {
+    get partial() {
+      return prefixBytes !== 0 || remaining !== 0;
+    },
+    consume(data) {
+      let frames = 0;
+      for (let offset = 0; offset < data.byteLength; ) {
+        if (remaining) {
+          const size = Math.min(remaining, data.byteLength - offset);
+          remaining -= size;
+          offset += size;
+          if (!remaining) frames++;
+        } else {
+          length = length << 8 | data[offset++];
+          if (++prefixBytes === 2) {
+            remaining = length;
+            prefixBytes = 0;
+            length = 0;
+            if (!remaining) frames++;
+          }
+        }
+      }
+      return frames;
+    }
+  };
+}
+async function relayDNS(socket, websocket, responseHeader, payload, remote, signal) {
+  const queries = dnsFrameCounter(), replies = dnsFrameCounter();
+  let outstanding = 0, timer, awaitingResponse = false, reader;
+  const stop = () => {
+    clearTimeout(timer);
+    remote.onUpload = null;
+    try {
+      reader?.cancel().catch(() => {
+      });
+    } catch {
+    }
+  };
+  const arm = () => {
+    clearTimeout(timer);
+    awaitingResponse = outstanding > 0 || queries.partial || replies.partial;
+    timer = setTimeout(remote.close, awaitingResponse ? DNS响应超时 : DNS空闲超时);
+  };
+  remote.onUpload = (data) => {
+    outstanding += queries.consume(data);
+    if (!awaitingResponse) arm();
+  };
+  signal.addEventListener("abort", stop, { once: true });
+  try {
+    if (signal.aborted) return;
+    reader = socket.readable.getReader();
+    remote.onUpload(payload);
+    arm();
+    for (; ; ) {
+      const { value, done } = await reader.read();
+      if (done || signal.aborted) break;
+      const data = asBytes(value);
+      if (!data.byteLength) continue;
+      const answered = replies.consume(data);
+      outstanding = Math.max(0, outstanding - answered);
+      if (answered) arm();
+      if (websocket.readyState !== 1) break;
+      websocket.send(responseHeader ? concatBytes(responseHeader, data) : data);
+      responseHeader = null;
+    }
+  } finally {
+    stop();
+    signal.removeEventListener("abort", stop);
+    try {
+      reader?.releaseLock();
+    } catch {
+    }
+    remote.close();
+  }
+}
+async function forwardDNS(用户数据报块, 网页套接字, 值头部, remote, 请求值, 配置快照, signal) {
   for await (const attempt of outboundAttempts(配置快照, "8.8.4.4", 53)) {
     if (signal.aborted) break;
     let socket;
@@ -1357,17 +1497,23 @@ async function forwardDNS(用户数据报块, 网页套接字, 值头部, 请求
         signal,
         1
       );
-      await relayToWebSocket(socket, 网页套接字, 值头部, null);
+      if (signal.aborted) {
+        socket.close();
+        return;
+      }
+      remote.socket = socket;
+      remote.writer = socket.writable.getWriter();
+      relayDNS(socket, 网页套接字, 值头部, 用户数据报块, remote, signal).catch(remote.close);
+      remote.drainUpload();
       return;
     } catch {
-    } finally {
       try {
         socket?.close();
       } catch {
       }
     }
   }
-  closeWebSocket(网页套接字);
+  remote.close();
 }
 async function connectXHTTP(首包, 请求值扩展, 配置快照, signal) {
   const attempts = outboundAttempts(配置快照, 首包.hostname, 首包.port, () => 获取回退目标(
@@ -4414,7 +4560,14 @@ var 直连域名列表 = [
   "xn--b6gac.eu.org"
 ];
 function 规范化节点主机(主机786) {
-  return String(主机786 || "").trim().replace(/^\[([^\]]+)\]$/, "$1");
+  const host = String(主机786 || "").trim().replace(/^\[([^\]]+)\]$/, "$1");
+  if (!host || /[\s/@?#\\]/.test(host)) return "";
+  try {
+    new URL(`http://${host.includes(":") ? `[${host}]` : host}/`);
+    return host;
+  } catch {
+    return "";
+  }
 }
 var worker_default = {
   async fetch(request, env, context) {
@@ -4583,19 +4736,11 @@ async function 处理订阅请求(settings, request, token, url = null) {
   const nodeNamer = createNodeNamer();
   const 客户端配置 = { dns: settings.自定义域名系统, echDomain: settings.自定义加密客户端问候域名 };
   function 添加节点(列表, 显式端口 = false) {
-    最终链接列表.push(...generateNodeLinks(节点设置, 列表, token, workerHost, nodeNamer, 显式端口));
-  }
-  async function 添加备用节点() {
-    const 备用 = await 获取值备用地址(settings.当前工作器地区, settings.启用地区匹配);
-    添加节点([{ ip: 备用.domain, isp: "ProxyIP-" + settings.当前工作器地区 }]);
+    const valid = 列表.filter((node) => 规范化节点主机(node.ip) && (node.port == null && !显式端口 || normalizePort(node.port) !== null));
+    最终链接列表.push(...generateNodeLinks(节点设置, valid, token, workerHost, nodeNamer, 显式端口));
   }
   if (settings.启用原生地址) {
-    try {
-      添加节点([{ ip: workerHost, isp: "原生地址" }]);
-    } catch (错误) {
-      if (settings.当前工作器地区 === "CUSTOM") throw 错误;
-      await 添加备用节点();
-    }
+    添加节点([{ ip: workerHost, isp: "原生地址" }]);
   }
   const 是否有自定义优选 = settings.自定义优选地址列表.length > 0 || settings.自定义优选域名列表.length > 0;
   if (!settings.禁用优选) {
@@ -4618,33 +4763,19 @@ async function 处理订阅请求(settings, request, token, url = null) {
       }
       if (settings.启用优选地址) {
         if (!settings.优选地址源) {
-          try {
-            const addresses = await 获取值地址列表(settings);
-            if (addresses.length > 0) {
-              添加节点(addresses);
-            }
-          } catch {
-            await 添加备用节点();
-          }
+          添加节点(await 获取值地址列表(settings));
         }
       }
       if (settings.启用仓库优选) {
-        try {
-          const 新地址列表 = await 获取值解析新地址列表(settings);
-          if (新地址列表.length > 0) {
-            添加节点(新地址列表, true);
-          }
-        } catch {
-          await 添加备用节点();
-        }
+        添加节点(await 获取值解析新地址列表(settings), true);
       }
     }
   }
   if (最终链接列表.length === 0) {
-    const 错误备注 = "所有节点获取失败";
-    const protocol = "vless";
-    const 错误链接 = `${protocol}://00000000-0000-0000-0000-000000000000@127.0.0.1:80?encryption=none&security=none&type=ws&host=error.com&path=%2F#${encodeURIComponent(错误备注)}`;
-    最终链接列表.push(错误链接);
+    return new Response("已启用的节点来源未提供有效节点，请检查来源开关、优选列表和源服务后重试。", {
+      status: 503,
+      headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" }
+    });
   }
   let 订阅内容;
   let contentType = "text/plain; charset=utf-8";

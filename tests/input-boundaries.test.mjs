@@ -123,7 +123,7 @@ for (const phase of ['headers', 'body', 'size']) {
 }
 
 for (const phase of ['headers', 'body', 'size']) {
-  test(`built-in preferred source ${phase} is bounded and falls back to native nodes`, async t => {
+  test(`sole built-in preferred source ${phase} is bounded and fails without placeholder nodes`, async t => {
     const timers = timerRuntime();
     let cancelled = false;
     const { worker } = await loadWorker(t, { globals: { ...timers.globals,
@@ -139,9 +139,9 @@ for (const phase of ['headers', 'body', 'size']) {
     const pending = request(worker, environment({ epd: 'no', egi: 'no', ex: 'no', et: 'no' })).then(value => { response = value; });
     await flush();
     await timers.tick(60_000);
-    assert.equal(response?.status, 200);
+    assert.equal(response?.status, 503);
     await pending;
-    assert.match(atob(await response.text()), /127\.0\.0\.1/);
+    assert.match(await response.text(), /有效节点/);
     assert.equal(cancelled, true);
     assert.equal(timers.pending.size, 0);
   });

@@ -13,6 +13,9 @@ const 传输下载延迟 = 0;
 const 传输上传包大小 = 16 * 1024;
 const 传输上传队列上限 = 256 * 1024;
 const 首字节超时 = 3500;
+const 认证超时 = 5_000;
+const DNS响应超时 = 5_000;
+const DNS空闲超时 = 45_000;
 let activeXHTTPConnections = 0;
 const 上限值 = 32;
 export async function handleWebSocket(request, 配置快照) {
@@ -38,15 +41,18 @@ export async function handleWebSocket(request, 配置快照) {
   let remote = {
     socket: null,
     writer: null,
-    drainUpload: null
+    drainUpload: null,
+    close: 关闭传输
   };
   let 是否域名系统值 = false;
   let 协议类型 = null;
   let drainingUpload = false;
   let 传输值 = false;
+  let pendingBytes = 0;
   const 值队列 = createUploadQueue(传输上传包大小, 传输上传队列上限, 传输上传队列上限 >> 8);
   const fetcher = request.fetcher;
   const 连接取消 = new AbortController();
+  const authenticationTimer = setTimeout(关闭传输, 认证超时);
   const 出站配置 = { ...配置快照,
     已解析代理5配置: queryProxy || 配置快照.已解析代理5配置,
     是否代理已启用: !!queryProxy || 配置快照.是否代理已启用,
@@ -62,6 +68,8 @@ export async function handleWebSocket(request, 配置快照) {
   function 关闭传输() {
     if (传输值) return;
     传输值 = true;
+    clearTimeout(authenticationTimer);
+    pendingBytes = 0;
     连接取消.abort();
     值队列.clear();
     处理值远程写入器();
@@ -70,6 +78,23 @@ export async function handleWebSocket(request, 配置快照) {
   // A stream abort waits for an in-flight write; cancel pending dials directly.
   websocket.addEventListener('close', 关闭传输);
   websocket.addEventListener('error', 关闭传输);
+  function reserveInput(data) {
+    if (传输值) return false;
+    if (pendingBytes + data.byteLength > 传输上传队列上限) {
+      关闭传输();
+      return false;
+    }
+    pendingBytes += data.byteLength;
+    return true;
+  }
+  function releaseInput(bytes) {
+    pendingBytes = Math.max(0, pendingBytes - bytes);
+  }
+  function authenticated(protocol, headerBytes) {
+    协议类型 = protocol;
+    clearTimeout(authenticationTimer);
+    releaseInput(headerBytes);
+  }
   function 处理队列值(chunk) {
     const data = asBytes(chunk);
     if (!data.byteLength) return true;
@@ -88,7 +113,9 @@ export async function handleWebSocket(request, 配置快照) {
         if (传输值 || !remote.writer) break;
         const data = 值队列.bundle();
         if (!data) break;
+        remote.onUpload?.(data);
         await remote.writer.write(data);
+        releaseInput(data.byteLength);
       }
     } catch {
       关闭传输();
@@ -101,14 +128,15 @@ export async function handleWebSocket(request, 配置快照) {
     if (!drainingUpload && !值队列.empty && remote.writer) queueMicrotask(drainUpload);
   };
   const earlyDataHeader = request.headers.get("sec-websocket-protocol") || '';
-  const inbound = webSocketReadable(websocket, earlyDataHeader);
+  // Reserve at the event boundary, before pipeTo can queue behind a pending
+  // dial/write. Keep reservations until the corresponding socket write ends.
+  const inbound = webSocketReadable(websocket, earlyDataHeader, reserveInput, 连接取消.signal);
   inbound.pipeTo(new WritableStream({
     close() { 关闭传输(); },
     abort() { 关闭传输(); },
     async write(chunk) {
       if (传输值) return;
       const data = asBytes(chunk);
-      if (是否域名系统值) return await forwardDNS(data, websocket, null, fetcher, 出站配置, 连接取消.signal);
       if (remote.socket && remote.writer) {
         if (!处理队列值(data)) throw new Error('upload queue overflow');
         return;
@@ -120,7 +148,6 @@ export async function handleWebSocket(request, 配置快照) {
       if (启用明文 && data.byteLength >= 24) {
         const 轻量协议结果 = parseVlessHeader(data, 认证令牌);
         if (!轻量协议结果.hasError) {
-          协议类型 = "vless";
           const {
             port: port,
             hostname: hostname,
@@ -133,21 +160,30 @@ export async function handleWebSocket(request, 配置快照) {
           }
           const responseHeader = new Uint8Array([version[0], 0]);
           const payload = data.subarray(原始索引);
-          if (是否域名系统值) return forwardDNS(payload, websocket, responseHeader, fetcher, 出站配置, 连接取消.signal);
-          await connectWebSocketTCP(hostname, port, payload, websocket, responseHeader, remote, fetcher, 出站配置, 连接取消.signal);
+          authenticated('vless', 原始索引);
+          try {
+            if (是否域名系统值) {
+              await forwardDNS(payload, websocket, responseHeader, remote, fetcher, 出站配置, 连接取消.signal);
+            } else {
+              await connectWebSocketTCP(hostname, port, payload, websocket, responseHeader, remote, fetcher, 出站配置, 连接取消.signal);
+            }
+          } finally { releaseInput(payload.byteLength); }
           return;
         }
       }
       if (启用木马 && data.byteLength >= 56) {
         const 值结果 = await parseTrojanHeader(data, 认证令牌, 传输路径);
+        if (传输值) return;
         if (!值结果.hasError) {
-          协议类型 = "trojan";
           const {
             port: port,
             hostname: hostname,
             rawClientData: 原始客户端数据
           } = 值结果;
-          await connectWebSocketTCP(hostname, port, 原始客户端数据, websocket, null, remote, fetcher, 出站配置, 连接取消.signal);
+          authenticated('trojan', data.byteLength - 原始客户端数据.byteLength);
+          try {
+            await connectWebSocketTCP(hostname, port, 原始客户端数据, websocket, null, remote, fetcher, 出站配置, 连接取消.signal);
+          } finally { releaseInput(原始客户端数据.byteLength); }
           return;
         }
       }
@@ -347,28 +383,47 @@ function createDownloadBatcher(websocket) {
     flush: 刷新
   };
 }
-function webSocketReadable(websocket, 值数据头部) {
+function webSocketReadable(websocket, 值数据头部, reserveInput, signal) {
   let cancelled = false;
+  let detach = () => {};
   return new ReadableStream({
     start(controller) {
-      websocket.addEventListener('message', 事件 => {
-        if (!cancelled) controller.enqueue(asBytes(事件.data));
-      });
-      websocket.addEventListener('close', () => {
-        if (!cancelled) {
-          closeWebSocket(websocket);
-          controller.close();
-        }
-      });
-      websocket.addEventListener('error', error => controller.error(error));
+      const finish = error => {
+        if (cancelled) return;
+        detach();
+        if (error) controller.error(error); else controller.close();
+      };
+      const enqueue = chunk => {
+        if (cancelled) return;
+        const data = asBytes(chunk);
+        if (reserveInput(data) && !cancelled) controller.enqueue(data);
+      };
+      const message = event => {
+        try { enqueue(event.data); } catch (error) { finish(error); }
+      };
+      const closed = () => finish();
+      const failed = event => finish(event.error || new Error('WebSocket error'));
+      const aborted = () => finish(signal.reason);
+      detach = () => {
+        cancelled = true;
+        websocket.removeEventListener('message', message);
+        websocket.removeEventListener('close', closed);
+        websocket.removeEventListener('error', failed);
+        signal.removeEventListener('abort', aborted);
+      };
+      websocket.addEventListener('message', message);
+      websocket.addEventListener('close', closed);
+      websocket.addEventListener('error', failed);
+      signal.addEventListener('abort', aborted, { once: true });
+      if (signal.aborted) return aborted();
       const {
         earlyData: 值数据,
         error: error
       } = decodeEarlyData(值数据头部);
-      if (error) controller.error(error);else if (值数据) controller.enqueue(asBytes(值数据));
+      if (error) finish(error); else if (值数据) enqueue(值数据);
     },
     cancel() {
-      cancelled = true;
+      detach();
       closeWebSocket(websocket);
     }
   });
@@ -450,19 +505,92 @@ async function relayToWebSocket(远程套接字, websocket, 头部数据, 重试
   }
   if (!是否有数据 && !failedOrRetried && 重试值) 重试值();
 }
-async function forwardDNS(用户数据报块, 网页套接字, 值头部, 请求值, 配置快照, signal) {
+// Count complete TCP DNS frames without buffering or rewriting their contents.
+// Prefixes and bodies can span any number of WS/socket messages.
+function dnsFrameCounter() {
+  let prefixBytes = 0, length = 0, remaining = 0;
+  return {
+    get partial() { return prefixBytes !== 0 || remaining !== 0; },
+    consume(data) {
+      let frames = 0;
+      for (let offset = 0; offset < data.byteLength;) {
+        if (remaining) {
+          const size = Math.min(remaining, data.byteLength - offset);
+          remaining -= size; offset += size;
+          if (!remaining) frames++;
+        } else {
+          length = (length << 8) | data[offset++];
+          if (++prefixBytes === 2) {
+            remaining = length;
+            prefixBytes = 0; length = 0;
+            if (!remaining) frames++;
+          }
+        }
+      }
+      return frames;
+    }
+  };
+}
+async function relayDNS(socket, websocket, responseHeader, payload, remote, signal) {
+  const queries = dnsFrameCounter(), replies = dnsFrameCounter();
+  let outstanding = 0, timer, awaitingResponse = false, reader;
+  const stop = () => {
+    clearTimeout(timer);
+    remote.onUpload = null;
+    try { reader?.cancel().catch(() => {}); } catch {}
+  };
+  const arm = () => {
+    clearTimeout(timer);
+    awaitingResponse = outstanding > 0 || queries.partial || replies.partial;
+    timer = setTimeout(remote.close, awaitingResponse ? DNS响应超时 : DNS空闲超时);
+  };
+  remote.onUpload = data => {
+    outstanding += queries.consume(data);
+    // Extra queries and partial replies must not postpone an unanswered query.
+    if (!awaitingResponse) arm();
+  };
+  signal.addEventListener('abort', stop, { once: true });
+  try {
+    if (signal.aborted) return;
+    reader = socket.readable.getReader();
+    remote.onUpload(payload);
+    arm();
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done || signal.aborted) break;
+      const data = asBytes(value);
+      if (!data.byteLength) continue;
+      const answered = replies.consume(data);
+      outstanding = Math.max(0, outstanding - answered);
+      if (answered) arm();
+      if (websocket.readyState !== 1) break;
+      websocket.send(responseHeader ? concatBytes(responseHeader, data) : data);
+      responseHeader = null;
+    }
+  } finally {
+    stop();
+    signal.removeEventListener('abort', stop);
+    try { reader?.releaseLock(); } catch {}
+    remote.close();
+  }
+}
+async function forwardDNS(用户数据报块, 网页套接字, 值头部, remote, 请求值, 配置快照, signal) {
   for await (const attempt of outboundAttempts(配置快照, '8.8.4.4', 53)) {
     if (signal.aborted) break;
     let socket;
     try {
       socket = await dialOutbound(attempt.address, attempt.port, 用户数据报块, 请求值,
         配置快照.已解析代理5配置, attempt.viaProxy, signal, 1);
-      await relayToWebSocket(socket, 网页套接字, 值头部, null);
+      if (signal.aborted) { socket.close(); return; }
+      remote.socket = socket;
+      remote.writer = socket.writable.getWriter();
+      // Reading runs independently; the WS sink is free to accept more queries.
+      relayDNS(socket, 网页套接字, 值头部, 用户数据报块, remote, signal).catch(remote.close);
+      remote.drainUpload();
       return;
-    } catch {}
-    finally { try { socket?.close(); } catch {} }
+    } catch { try { socket?.close(); } catch {} }
   }
-  closeWebSocket(网页套接字);
+  remote.close();
 }
 async function connectXHTTP(首包, 请求值扩展, 配置快照, signal) {
   const attempts = outboundAttempts(配置快照, 首包.hostname, 首包.port, () => 获取回退目标(
