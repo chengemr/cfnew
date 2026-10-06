@@ -67,7 +67,7 @@ test('failed preferred fetches clear timers and do not retry without a deadline'
     calls++;
     throw new Error('fixture source failure');
   } } });
-  await subscription(worker, remoteEnv);
+  assert.equal((await request(worker, remoteEnv)).status, 503);
   assert.equal(calls, 1);
   assert.equal(timers.pending.size, 0);
 });
@@ -83,7 +83,7 @@ test('preferred-source deadlines also cover reading a stalled response body', as
       signal.addEventListener('abort', () => controller.error(new Error('fixture body timeout')));
     }, pull() { started.resolve(); } }, { highWaterMark: 0 }));
   } } });
-  const pending = subscription(worker, remoteEnv);
+  const pending = request(worker, remoteEnv);
   t.after(async () => { bodyController.error(new Error('fixture cleanup')); await pending; });
   await started.promise;
   await timers.tick(5_000);
@@ -91,8 +91,10 @@ test('preferred-source deadlines also cover reading a stalled response body', as
   pending.then(() => { settled = true; });
   await timers.tick(0);
   assert.equal(settled, true, 'reading the source body exceeded the request deadline');
-  const nodes = await pending;
-  assert.equal(nodes[0].hostname, '127.0.0.1');
+  const response = await pending;
+  assert.equal(response.status, 503);
+  assert.match(await response.text(), /有效节点/);
+  assert.equal(bodyController.desiredSize, null);
   assert.equal(timers.pending.size, 0);
 });
 
@@ -101,8 +103,9 @@ test('HTTP error bodies are not treated as preferred node lists', async t => {
     assert.equal(url, source);
     return new Response('192.0.2.10:8443', { status: 503 });
   } } });
-  const nodes = await subscription(worker, remoteEnv);
-  assert.equal(nodes[0].hostname, '127.0.0.1');
+  const response = await request(worker, remoteEnv);
+  assert.equal(response.status, 503);
+  assert.match(await response.text(), /有效节点/);
 });
 
 test('bare IPv6 source entries use the default port without losing the address', async t => {

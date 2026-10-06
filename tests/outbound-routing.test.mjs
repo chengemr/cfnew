@@ -17,7 +17,8 @@ async function route(t, transport, env, {
 } = {}) {
   const attempts = [], sockets = [], tasks = [], received = [];
   const runtime = websocketRuntime();
-  const { worker } = await loadWorker(t, { globals: { ...runtime.globals, ...timers?.globals,
+  const clock = timers || timerRuntime();
+  const { worker } = await loadWorker(t, { globals: { ...runtime.globals, ...clock.globals,
     Math: Object.assign(Object.create(Math), { random: () => 0 })
   }, connect(target) {
     const proxy = target.hostname === 'proxy.example';
@@ -78,7 +79,7 @@ async function route(t, transport, env, {
     websocket.receive(packet(transport));
     for (let i = 0; i < 5; i++) await flush();
     if (timers) { await timers.tick(3_510); await timers.tick(10); }
-    else await new Promise(resolve => setTimeout(resolve, 15));
+    else await clock.tick(15);
     success = websocket.readyState === 1;
     if (success) assert.deepEqual(received, transport === 'trojan' ? [42] : [0, 0, 42]);
   }
