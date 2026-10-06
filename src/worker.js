@@ -3,12 +3,11 @@
 import { decodeBase64Text as 解码64 } from './encoding.js';
 
 import { handleWebSocket, handleXHTTP } from './transports/sessions.js';
-import { 获取值备用地址 } from './transports/outbound.js';
 import { getConfigStore } from './storage.js';
 import { createSettings, getAuthenticationToken } from './runtime.js';
 import { fetchBytes } from './http.js';
 import { handleConfig, handlePreferred } from './api.js';
-import { parseAddress as 解析地址值端口 } from './preferred.js';
+import { parseAddress as 解析地址值端口, normalizePort } from './preferred.js';
 import { getPaddingKeys as 获取叉HTTP填充标识, validatePadding as 校验叉HTTP填充, generatePadding as 生成叉HTTP填充串 } from './transports/padding.js';
 import { generateSingBox } from './subscriptions/singbox.js';
 import { generateSurge, generateLoon, generateQuantumultX } from './subscriptions/ini.js';
@@ -44,7 +43,13 @@ const 直连域名列表 = [
 ];
 
 function 规范化节点主机(主机786) {
-  return String(主机786 || '').trim().replace(/^\[([^\]]+)\]$/, '$1');
+  const host = String(主机786 || '').trim().replace(/^\[([^\]]+)\]$/, '$1');
+  if (!host || /[\s/@?#\\]/.test(host)) return '';
+  try {
+    // Use the clients' URL hostname rules, retaining IDN and existing aliases.
+    new URL(`http://${host.includes(':') ? `[${host}]` : host}/`);
+    return host;
+  } catch { return ''; }
 }
 
 export default {
@@ -211,19 +216,12 @@ async function 处理订阅请求(settings, request, token, url = null) {
 
   const 客户端配置 = { dns: settings.自定义域名系统, echDomain: settings.自定义加密客户端问候域名 };
   function 添加节点(列表, 显式端口 = false) {
-    最终链接列表.push(...generateNodeLinks(节点设置, 列表, token, workerHost, nodeNamer, 显式端口));
-  }
-  async function 添加备用节点() {
-    const 备用 = await 获取值备用地址(settings.当前工作器地区, settings.启用地区匹配);
-    添加节点([{ ip: 备用.domain, isp: 'ProxyIP-' + settings.当前工作器地区 }]);
+    const valid = 列表.filter(node => 规范化节点主机(node.ip) &&
+      (node.port == null && !显式端口 || normalizePort(node.port) !== null));
+    最终链接列表.push(...generateNodeLinks(节点设置, valid, token, workerHost, nodeNamer, 显式端口));
   }
   if (settings.启用原生地址) {
-    try {
-      添加节点([{ ip: workerHost, isp: '原生地址' }]);
-    } catch (错误) {
-      if (settings.当前工作器地区 === 'CUSTOM') throw 错误;
-      await 添加备用节点();
-    }
+    添加节点([{ ip: workerHost, isp: '原生地址' }]);
   }
   const 是否有自定义优选 = settings.自定义优选地址列表.length > 0 || settings.自定义优选域名列表.length > 0;
   if (!settings.禁用优选) {
@@ -246,33 +244,19 @@ async function 处理订阅请求(settings, request, token, url = null) {
       }
       if (settings.启用优选地址) {
         if (!settings.优选地址源) {
-          try {
-            const addresses = await 获取值地址列表(settings);
-            if (addresses.length > 0) {
-              添加节点(addresses);
-            }
-          } catch {
-            await 添加备用节点();
-          }
+          添加节点(await 获取值地址列表(settings));
         }
       }
       if (settings.启用仓库优选) {
-        try {
-          const 新地址列表 = await 获取值解析新地址列表(settings);
-          if (新地址列表.length > 0) {
-            添加节点(新地址列表, true);
-          }
-        } catch {
-          await 添加备用节点();
-        }
+        添加节点(await 获取值解析新地址列表(settings), true);
       }
     }
   }
   if (最终链接列表.length === 0) {
-    const 错误备注 = "所有节点获取失败";
-    const protocol = "vless";
-    const 错误链接 = `${protocol}://00000000-0000-0000-0000-000000000000@127.0.0.1:80?encryption=none&security=none&type=ws&host=error.com&path=%2F#${encodeURIComponent(错误备注)}`;
-    最终链接列表.push(错误链接);
+    return new Response('已启用的节点来源未提供有效节点，请检查来源开关、优选列表和源服务后重试。', {
+      status: 503,
+      headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' }
+    });
   }
   let 订阅内容;
   let contentType = 'text/plain; charset=utf-8';

@@ -26,6 +26,15 @@ writes, input boundaries, residential subscriptions, outbound DNS policy, proxy
 handshakes, cancellation, and XHTTP lifetime and stream cleanup using a virtual
 clock. The BYOB fixture adapts Cloudflare's readAtLeast extension to Node streams.
 
+`ws-dns-guards.test.mjs` keeps DNS upstream connections open across queries,
+splits TCP length prefixes, combines frames, and verifies unanswered/partial
+response deadlines and disconnect cleanup. It also covers WS entry reservations
+through stalled dials, handshakes and writes, early data, the 256 KiB limit and
+the five-second authentication deadline. `subscription-failure.test.mjs` checks
+HTTP errors, timeouts, empty/invalid source contents and disabled-source behavior
+for Base64, Clash and Sing-box. Existing source tests still assert body deadlines,
+timer/reader cleanup and rejection of HTTP error bodies as node lists.
+
 Browser and native Mihomo tests are separate from `test:all`:
 
 ```sh
