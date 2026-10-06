@@ -1,8 +1,11 @@
 const bufferSize = 128 * 1024;
 
 // Upload EOF is a half-close. Keep reading until the remote side ends or fails.
-export function createXHTTPRelay(packet, socket, idleTimeout = 45_000) {
+export function createXHTTPRelay(packet, socket, idleTimeout = 45_000, signal) {
   const controller = new AbortController();
+  const abort = () => controller.abort(signal.reason);
+  signal?.addEventListener('abort', abort, { once: true });
+  if (signal?.aborted) abort();
   let lastActivity = Date.now();
   const touch = () => { lastActivity = Date.now(); };
   const output = new TransformStream({
@@ -35,6 +38,7 @@ export function createXHTTPRelay(packet, socket, idleTimeout = 45_000) {
   }, 5_000);
   const closed = Promise.race([download, upload.then(() => download)]).catch(() => {}).finally(async () => {
     clearInterval(timer);
+    signal?.removeEventListener('abort', abort);
     controller.abort();
     await Promise.allSettled([
       packet.reader.cancel(), writer.abort(), Promise.resolve().then(() => socket.close())
