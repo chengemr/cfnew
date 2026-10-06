@@ -1,5 +1,5 @@
-// CFnew - 终端 v4.0.1
-// 版本: v4.0.1
+// CFnew - 终端 v4.0.2
+// 版本: v4.0.2
 import { decodeBase64Text as 解码64 } from './encoding.js';
 
 import { handleWebSocket, handleXHTTP } from './transports/sessions.js';
