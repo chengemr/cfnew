@@ -23,3 +23,25 @@ jobs:
       - run: npm ci
       - run: npm run check
       - run: npm run test:all
+
+  clients:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      matrix:
+        worker: ['明文源吗', '少年你相信光吗']
+    env:
+      CFNEW_WORKER_FILE: ${{ matrix.worker }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: bash scripts/install-mihomo.sh "${RUNNER_TEMP}/cfnew-bin"
+      - run: npm run test:browser
+      - run: npm run test:mihomo
+        env:
+          CFNEW_MIHOMO_BIN: ${{ runner.temp }}/cfnew-bin/mihomo

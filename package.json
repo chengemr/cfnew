@@ -17,6 +17,7 @@
   "devDependencies": {
     "esbuild": "0.28.2",
     "javascript-obfuscator": "5.9.0",
+    "playwright": "1.62.1",
     "yaml": "2.9.1"
   },
   "version": "4.0.1"
