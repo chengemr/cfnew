@@ -2,8 +2,9 @@
 import { connect as 连接 } from 'cloudflare:sockets';
 
 // ============================ 配置区（改这里就能用） ============================
-// 认证令牌：即连接用的 UUID。生成方式：Windows 下执行 Powershell -Command "[guid]::NewGuid()"
-let 认证令牌 = '2541f8d4-d157-46af-9169-0025bf435fbc';
+// 认证令牌：部署前必须填写自己的 UUID，留空或使用旧示例令牌时返回 503。
+// 生成方式：Windows 下执行 Powershell -Command "[guid]::NewGuid()"
+let 认证令牌 = '';
 // 回退地址：直连失败时改走的地址，留空表示不启用
 let 回退地址 = 'pp.xy.kg';
 // 中转地址：经由中转服务器出站。格式 user:pass@host:port 或 host:port，留空表示不启用
@@ -28,9 +29,7 @@ function 解码64(文本) {
 	return 文本解码器.decode(字节);
 }
 
-if (!校验令牌格式(认证令牌)) {
-	throw new Error('令牌格式不合法');
-}
+认证令牌 = typeof 认证令牌 === 'string' ? 认证令牌.trim().toLowerCase() : '';
 
 // 中转地址在编译期固定，这里直接解析一次（解析中转地址 靠函数提升可用）
 let 中转配置 = {};
@@ -52,6 +51,12 @@ export default {
 	 * @returns {Promise<Response>}
 	 */
 	async fetch(request) {
+		if (!校验令牌格式(认证令牌) || /^(?:2541f8d4-d157-46af-9169-0025bf435fbc|f64bdc57-0f54-4705-bf75-cfd646d98c06)$/i.test(认证令牌)) {
+			return new Response('请在文件顶部配置自己的有效 UUID 认证令牌；旧公开示例令牌不可使用。', {
+				status: 503,
+				headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' }
+			});
+		}
 		try {
 			const 升级头 = request.headers.get('Upgrade');
 			if (!升级头 || 升级头 !== 'websocket') {

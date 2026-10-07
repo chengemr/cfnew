@@ -44,7 +44,7 @@ export function parseShareLink(链接603) {
         password: decodeURIComponent(网址599.username),
         server: normalizeHost(网址599.hostname),
         port: parseInt(网址599.port) || 443,
-        tls: true,
+        tls: 参数值.get('security') !== 'none',
         network: 参数值.get('type') || 'ws',
         path: 参数值.get('path') || '/?ed=2048',
         host: normalizeHost(参数值.get('host') || 网址599.hostname),

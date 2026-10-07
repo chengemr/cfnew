@@ -1,7 +1,8 @@
 import { fetchBytes } from '../http.js';
 import { decodeBase64Text as 解码64 } from '../encoding.js';
-import { parseShareLink as 解析值链接 } from './links.js';
-import { renderClashNode } from './clash.js';
+import { SubscriptionCompatibilityError } from './errors.js';
+import { parseShareLink as 解析值链接, quoteYaml } from './links.js';
+import { renderClashNode, isClashCompatibleNode } from './clash.js';
 
 const 家宽节点源 = 解码64('aHR0cHM6Ly93d3cudnBuZ2F0ZS5uZXQvYXBpL2lwaG9uZS8=');
 const 家宽节点类型 = 解码64('b3BlbnZwbg==');
@@ -137,8 +138,10 @@ export async function generateResidential(链接列表, { dns, echDomain } = {})
   const 家宽自动 = '\ud83c\udfe0 家宽自动';
   const 家宽手选 = '\ud83c\udfe0 家宽节点';
   const 节点选择 = '\ud83d\ude80 节点选择';
-  const 全部前置 = 链接列表.map(解析值链接)
-    .filter(项 => 项 && (项.proto === 解码64('dmxlc3M=') || 项.proto === 解码64('dHJvamFu')));
+  const 全部前置 = 链接列表.map(解析值链接).filter(isClashCompatibleNode);
+  if (!全部前置.length) {
+    throw new SubscriptionCompatibilityError('当前 Clash 家宽格式没有兼容的前置节点，请启用 VLESS WebSocket 或 TLS Trojan WebSocket。');
+  }
   // 落地隧道的握手特征很明显，前置用明文会被一眼认出来，有 TLS 节点就只用 TLS 的
   const 加密前置 = 全部前置.filter(项 => 项.tls);
   const 前置节点 = 加密前置.length ? 加密前置 : 全部前置;
@@ -190,8 +193,8 @@ export async function generateResidential(链接列表, { dns, echDomain } = {})
       '    remote-dns-resolve: true',
       '    dns: [ 8.8.8.8, 1.1.1.1 ]'
     ];
-    // 一个前置都没有就退化成直连落地，订阅至少还能用
-    if (前置名称.length) 行.push('    ' + 家宽前置字段 + ': "' + 前置组名 + '"');
+    // 已确保存在兼容前置，落地始终经由此组连接。
+    行.push('    ' + 家宽前置字段 + ': "' + 前置组名 + '"');
     // 证书全站同一份，第一个节点定锚点，后面引用，全量几十个节点能省下几百 KB
     if (下标 === 0) {
       行.push('    ca: &jkca |-', 缩进证书文本(证书.ca, '      '));
@@ -202,7 +205,7 @@ export async function generateResidential(链接列表, { dns, echDomain } = {})
     }
     节点段.push(行.join('\n'));
   });
-  const 列出 = 名称列表 => 名称列表.map(名称 => '      - "' + 名称 + '"').join('\n');
+  const 列出 = 名称列表 => 名称列表.map(名称 => '      - ' + quoteYaml(名称)).join('\n');
   // 自动组按速度排，决定回落顺序；手选组按国家排，翻起来好找
   const 按速度 = 家宽项.map(项 => 项.名称);
   const 按国家 = 家宽项.slice().sort((甲, 乙) => 甲.国家 === 乙.国家 ? 0 : (甲.国家 < 乙.国家 ? -1 : 1)).map(项 => 项.名称);

@@ -29,7 +29,7 @@ if (process.env.CFNEW_QA_FONT_DIR) {
     + ':root{font-family:"Noto Sans SC",Arial,sans-serif}';
 }
 
-async function app(t, { stored = {}, env = {}, kv = true, mobile = false, fa = false } = {}) {
+async function app(t, { stored = {}, env = {}, kv = true, mobile = false, fa = false, authenticated = true } = {}) {
   const binding = mockKV({ d: '/existing/panel', yx: 'example.com:8443#旧节点',
     s: 'user:password@proxy.example:1080', qj: 'only', ...stored });
   const config = environment({ ex: 'no', egi: 'yes', d: '/env/panel', ...(kv ? { C: binding } : {}), ...env });
@@ -56,7 +56,16 @@ async function app(t, { stored = {}, env = {}, kv = true, mobile = false, fa = f
   const errors = []; page.on('pageerror', error => errors.push(error.message));
   await page.route('**/*', route => route.request().url().startsWith(origin) ? route.continue() : route.abort());
   t.after(async () => { try { assert.deepEqual(errors, []); } finally { await context.close(); } });
-  const go = (suffix = '') => page.goto(origin + (kv ? '/existing/panel' : '/env/panel') + suffix);
+  const managementPath = kv ? '/existing/panel' : config.d || '/' + (config.u || config.U).toLowerCase();
+  if (authenticated) {
+    const response = await context.request.post(origin + managementPath + '/api/login', {
+      data: { token: config.ADMIN_TOKEN }
+    });
+    assert.equal(response.status(), 200);
+    assert.equal((await response.json()).success, true);
+    requests.length = 0;
+  }
+  const go = (suffix = '') => page.goto(origin + managementPath + suffix);
   return { binding, config, requests, page, context, origin, go };
 }
 async function dirtyCount(page, count) { await page.waitForFunction(count => document.getElementById('saveState').textContent.startsWith(String(count)), count); }
@@ -138,6 +147,18 @@ test('ECH requires TLS; the final protocol cannot be disabled', async t => {
   assert.equal(await page.locator('#dkby').isDisabled(), true);
   await save(page);
   assert.deepEqual(requests.find(request => request.method === 'POST').body, { et: 'no', ech: 'yes', dkby: 'yes' });
+});
+
+test('DNS addresses retain TLS, QUIC, UDP, bare host and IPv6 formats when saved', async t => {
+  const { page, binding, requests, go } = await app(t);
+  await go('#config');
+  for (const customDNS of ['h3://dns.example:8443/dns-query', 'tls://dns.example:8853',
+    'quic://[2001:db8::1]:8853', 'udp://1.1.1.1:5353', 'dns.example:5353', '[2001:db8::1]:5353', '2001:db8::1']) {
+    await page.locator('#customDNS').fill(customDNS);
+    await save(page);
+    assert.equal(JSON.parse(binding.data.get('c')).customDNS, customDNS);
+    assert.deepEqual(requests.filter(request => request.method === 'POST').at(-1).body, { customDNS });
+  }
 });
 
 test('reset restores environment path and clears jk/ena along with other known overrides', async t => {
@@ -296,13 +317,52 @@ for (const [label, options] of [['desktop', {}], ['mobile', { mobile: true }], [
 }
 
 test('public entry page verifies existing credentials and does not reveal custom paths', async t => {
-  const { page, origin } = await app(t);
+  const { page, origin, config, context, requests } = await app(t, { authenticated: false });
   await page.goto(origin + '/');
   assert.ok(!(await page.content()).includes('/existing/panel'));
+  assert.ok(!(await page.content()).includes(config.ADMIN_TOKEN));
+  await page.locator('#adminToken').fill(config.ADMIN_TOKEN);
   await page.locator('#credential').fill('/wrong/path'); await page.locator('#connectButton').click();
   await page.locator('#connectError').waitFor({ state: 'visible' });
+  assert.equal(await page.locator('#adminToken').inputValue(), '');
+  await page.locator('#credential').fill('/existing/panel');
+  await page.locator('#adminToken').fill('incorrect-management-key');
+  await page.locator('#connectButton').click();
+  await page.waitForFunction(() => document.getElementById('connectError').textContent.includes('Invalid management credential'));
+  assert.equal(await page.locator('#adminToken').inputValue(), '');
+  assert.equal((await context.cookies()).some(cookie => cookie.name === 'cfnew_admin_session'), false);
+  await page.locator('#adminToken').fill(config.ADMIN_TOKEN);
   await page.locator('#credential').fill('/existing/panel'); await page.locator('#connectButton').click();
   await page.waitForURL('**/existing/panel');
   assert.equal(await page.locator('#pageTitle').textContent(), '订阅中心');
+  assert.ok(!(await page.content()).includes(config.ADMIN_TOKEN));
+  assert.ok(requests.some(request => request.path === '/existing/panel/api/login' && request.body.token === config.ADMIN_TOKEN));
+  assert.equal(requests.some(request => request.path.includes(config.ADMIN_TOKEN)), false);
+  assert.equal(await page.evaluate(token => [...Object.values(localStorage), ...Object.values(sessionStorage)].includes(token), config.ADMIN_TOKEN), false);
+  const session = (await context.cookies()).find(cookie => cookie.name === 'cfnew_admin_session');
+  assert.equal(session.httpOnly, true);
+  assert.equal(session.sameSite, 'Strict');
   assert.equal(UUID.length, 36);
+});
+
+test('entry page accepts a compact 32-character UUID and keeps its route form', async t => {
+  const token = UUID.replaceAll('-', '');
+  const { page, origin, config } = await app(t, { kv: false, authenticated: false, env: { u: token, d: '' } });
+  await page.goto(origin + '/');
+  await page.locator('#credential').fill(token);
+  await page.locator('#adminToken').fill(config.ADMIN_TOKEN);
+  await page.locator('#connectButton').click();
+  await page.waitForURL('**/' + token);
+  assert.equal(await page.locator('#subscriptionUrl').inputValue(), origin + '/' + token + '/sub?target=clash');
+});
+
+test('logging out removes the management session while keeping subscriptions available', async t => {
+  const { page, origin, go, context, requests } = await app(t);
+  await go();
+  await page.locator('#logout').click();
+  await page.waitForURL(origin + '/');
+  assert.equal((await context.cookies()).some(cookie => cookie.name === 'cfnew_admin_session'), false);
+  assert.equal((await context.request.get(origin + '/existing/panel/api/config')).status(), 401);
+  assert.equal((await context.request.get(origin + '/existing/panel/sub?target=clash')).status(), 200);
+  assert.ok(requests.some(request => request.method === 'POST' && request.path === '/existing/panel/api/logout'));
 });

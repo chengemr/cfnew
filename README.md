@@ -1,4 +1,4 @@
-# CFnew - 终端 v4.0.3
+# CFnew - 终端 v4.0.4
 
 > **⚠️ 重要：部署后请将兼容日期设置为 `2026-01-20`**
 >
@@ -37,9 +37,30 @@ npm run test:all
 Pages 更新和兼容性限制见 [PAGES-UPDATE.md](PAGES-UPDATE.md)。
 上述本地检查不能替代实际 Cloudflare 部署与客户端连接验收。
 
-**订阅与管理权限（独立后续任务）：**绑定 KV 后，订阅与配置管理仍共用 UUID／自定义路径。
-持有订阅链接的人可以推导 `/api/config` 地址并读取、修改配置；`ae=no` 只关闭优选 API，
-不能保护配置接口。分享订阅前需要拆分独立管理凭据，这次修复尚未解决此权限问题。
+**管理认证变更：**管理页面和 API 现在需要独立环境密钥 `ADMIN_TOKEN`；
+订阅链接与代理认证继续使用原 UUID／自定义路径，无需更新客户端链接。
+升级前设置 `ADMIN_TOKEN`，缺失或不安全时管理入口返回 503，订阅与代理继续工作。
+`ae=yes` 只开启优选 API 的功能开关，不能替代管理认证。
+
+### 管理认证与升级
+
+1. 在 Worker／Pages 环境中添加 Secret `ADMIN_TOKEN`，使用独立随机值（32–256 个字母、数字、`_` 或 `-`）。可本地生成 64 位十六进制密钥：
+
+   ```sh
+   node -e 'console.log(require("node:crypto").randomBytes(32).toString("hex"))'
+   ```
+
+2. 密钥不能复用 `U`、Trojan 密码 `tp` 或自定义路径 `d`。不要放入订阅链接、KV 配置或分享给订阅使用者。
+3. 更新单文件后，从 `/` 输入原 `U`／`D` 和管理密钥登录。浏览器使用 8 小时的签名 HttpOnly、SameSite=Strict 会话 Cookie，HTTPS 下带 Secure；退出登录清除浏览器 Cookie，轮换环境密钥会使全部旧会话失效。
+4. 管理 API 请求增加 `Authorization: Bearer <ADMIN_TOKEN>`。原 KV 绑定与数据格式保持不变。
+
+兼容入口 `edgetunnel经典轻量版`、`snippets` 默认凭据留空，部署前必须在文件顶部填写自己的 UUID；
+这两个文件不读取 `u/U` 环境变量，原仓库的公开示例 UUID 会被拒绝。
+
+本次完善还修复保存前读取旧缓存、WS 回退上传不完整、订阅格式兼容和名称转义问题。
+Surge 需要 TLS Trojan；Clash／家宽／INI 会过滤明文 Trojan，Sing-box 保留明文。
+目标格式没有兼容节点、或 INI 无法表达含逗号／换行的 Trojan 密码时返回 422，
+不会以成功状态覆盖客户端配置。XHTTP 不生成 HTTP 端口上的 TLS 节点。
 
 ## 主要功能
 
@@ -53,6 +74,17 @@ Pages 更新和兼容性限制见 [PAGES-UPDATE.md](PAGES-UPDATE.md)。
 - 应用唤醒：点按钮自动打开对应客户端
 - 自动识别：根据User-Agent自动返回对应格式
 - 多语言：支持中文和波斯语，根据浏览器语言自动切换
+
+## v4.0.4 更新
+
+- 管理页面和 API 改用独立 `ADMIN_TOKEN`，支持签名会话、退出和 Bearer 请求；升级前必须设置管理密钥，原订阅链接无需修改。
+- 两份旧版兼容入口不再预置公开 UUID，部署前需在文件顶部填写自己的 UUID。
+- 保存前完整刷新 KV，修复应用缓存覆盖已保存字段；Cloudflare KV 的最终一致性限制仍保留。
+- VLESS／Trojan 首字节回退完整重放跨 WS 消息的上传数据，并计入 256 KiB 限额。
+- 修复明文 Trojan 转换、XHTTP 端口过滤、Surge 空代理配置、INI 密码分隔符及家宽 YAML 名称转义；不兼容的目标格式返回 422。
+- 管理页支持后端接受的 DNS 格式，首页支持 32 位紧凑 UUID。
+- Node 18/24 下明文／混淆入口各 588 项回归通过，浏览器各 20 项、Mihomo 各 6 项检查通过，并补充真实 workerd 与 Sing-box 本地验证。
+- [Release v4.0.4](https://github.com/chengemr/cfnew/releases/tag/v4.0.4) 提供 `Pages.zip`、两种 Worker 和 SHA256 校验文件；详情见 [发布说明](release-notes/v4.0.4.md)。
 
 ## v4.0.3 更新
 
@@ -209,7 +241,8 @@ Pages 更新和兼容性限制见 [PAGES-UPDATE.md](PAGES-UPDATE.md)。
 #### 基础配置
 | 变量名 | 值 | 说明 |
 | :--- | :--- | :--- |
-| `u` / `U` | 你的 UUID | 必需，用于访问订阅和配置界面；缺失或格式非法时返回 503，不使用默认凭据 |
+| `u` / `U` | 你的 UUID | 必需，用于订阅和代理认证及管理路由；缺失或格式非法时返回 503，不使用默认凭据 |
+| `ADMIN_TOKEN` | 独立随机密钥 | 管理页面和 API 必需；32–256 个字母、数字、`_` 或 `-`，也支持 `admin_token`；缺失时只关闭管理入口 |
 | `p` | proxyip | 可选，自定义ProxyIP地址和端口，支持 IPv4/IPv6/域名。设置后 `wk` 地区匹配失效（互斥）。也可在节点 path 里单独指定 |
 | `s` | 出站代理地址 | 可选。支持 SOCKS5 和 HTTP/HTTPS 代理，见下方「[出站代理](#出站代理)」。也可在节点 path 里单独指定 |
 | `d` | 自定义路径 | 可选，如 `/mypath` 或 `/path/to/sub`，不填用UUID路径。路径没 `/` 开头会自动补上 |
@@ -229,7 +262,7 @@ Pages 更新和兼容性限制见 [PAGES-UPDATE.md](PAGES-UPDATE.md)。
 #### 图形化配置（推荐）
 
 1. 在Workers中创建KV命名空间，绑定环境变量 `C`
-2. 部署后访问 `/{你的UUID}` 使用图形化配置
+2. 设置独立 Secret `ADMIN_TOKEN`，部署后从 `/` 输入 UUID／自定义路径和管理密钥登录
 3. 改完配置立即生效，不用重新部署
 
 #### 高级控制
@@ -294,26 +327,29 @@ https://你的域名/{UUID}?target=vg
 1. 在Cloudflare Workers中创建KV命名空间
 2. 在Workers设置中绑定KV，变量名设为 `C`
 3. 重新部署
-4. 访问 `/{你的UUID}` 使用图形化配置
+4. 设置独立 Secret `ADMIN_TOKEN`，从 `/` 输入 UUID／自定义路径和管理密钥登录
 
 #### API使用
 1. 下载优选软件：https://github.com/byJoey/yx-tools/releases
-2. 开启API：访问 `/{UUID}` 或 `/{自定义路径}`，找到"允许API管理"，开启后保存
+2. 使用 `ADMIN_TOKEN` 登录管理页面，开启“优选 API 管理”（`ae=yes`）；所有 API 请求同时携带管理 Bearer 密钥
 3. 添加单个IP：
 ```bash
 # 使用UUID路径
 curl -X POST "https://your-worker.workers.dev/{UUID}/api/preferred-ips" \
+  -H "Authorization: Bearer ${ADMIN_TOKEN}" \
   -H "Content-Type: application/json" \
   -d '{"ip": "1.2.3.4", "port": 443, "name": "香港节点"}'
 
 # 使用自定义路径（如果设置了d变量）
 curl -X POST "https://your-worker.workers.dev/{自定义路径}/api/preferred-ips" \
+  -H "Authorization: Bearer ${ADMIN_TOKEN}" \
   -H "Content-Type: application/json" \
   -d '{"ip": "1.2.3.4", "port": 443, "name": "香港节点"}'
 ```
 4. 批量添加IP：
 ```bash
 curl -X POST "https://your-worker.workers.dev/{UUID或自定义路径}/api/preferred-ips" \
+  -H "Authorization: Bearer ${ADMIN_TOKEN}" \
   -H "Content-Type: application/json" \
   -d '[
     {"ip": "1.2.3.4", "port": 443, "name": "节点1"},
@@ -323,6 +359,7 @@ curl -X POST "https://your-worker.workers.dev/{UUID或自定义路径}/api/prefe
 5. 清空所有IP：
 ```bash
 curl -X DELETE "https://your-worker.workers.dev/{UUID或自定义路径}/api/preferred-ips" \
+  -H "Authorization: Bearer ${ADMIN_TOKEN}" \
   -H "Content-Type: application/json" \
   -d '{"all": true}'
 ```
@@ -438,7 +475,7 @@ https://user:pass@proxy.example.com:8443
 #### 图形化配置
 
 - 用Cloudflare KV存配置
-- 访问 `/{你的UUID}` 或 `/{自定义路径}` 就能用
+- 从 `/` 输入 UUID／自定义路径和独立 `ADMIN_TOKEN` 登录后使用
 - 改完立即生效，不用重新部署
 - 优先级：KV配置 > 环境变量 > 默认值
 

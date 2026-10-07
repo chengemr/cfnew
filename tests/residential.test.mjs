@@ -24,6 +24,58 @@ test('residential subscriptions render shared front nodes and ECH settings', asy
   assert.equal(residential['dialer-proxy'], '⚡ CF前置');
 });
 
+for (const [description, name] of [
+  ['quotes', 'Office"VPN'],
+  ['literal backslashes', 'Office\\nVPN']
+]) {
+  test(`residential subscriptions preserve ${description} in custom front names`, async t => {
+    const { worker } = await loadWorker(t, { globals: { fetch: residentialResponse } });
+    const namedEnv = environment({ jk: 'yes', yx: `192.0.2.10:443#${name}`, ex: 'no' });
+    const response = await request(worker, namedEnv, path);
+    assert.equal(response.status, 200, await response.clone().text());
+    const config = parse(await response.text());
+    const frontNames = config.proxies.filter(node => node.type !== 'openvpn').map(node => node.name);
+    assert.deepEqual(frontNames, [`${name}-01`, `${name}-02`]);
+    const frontGroup = config['proxy-groups'].find(group => group.name === '⚡ CF前置');
+    assert.deepEqual(frontGroup.proxies, frontNames);
+  });
+}
+
+for (const target of ['vg', 'jk', 'jiakuan']) {
+  test(`${target}: plaintext Trojan-only subscriptions reject before fetching residential nodes`, async t => {
+    const { worker } = await loadWorker(t);
+    const plaintextEnv = environment({ jk: 'yes', yx: '192.0.2.10:80', dkby: 'no',
+      ev: 'no', et: 'yes', ex: 'no' });
+    const response = await request(worker, plaintextEnv, `/${UUID}/sub?target=${target}`);
+    assert.equal(response.status, 422, await response.clone().text());
+    assert.equal(response.headers.get('Cache-Control'), 'no-store');
+    assert.match(await response.text(), /前置节点.*VLESS.*TLS Trojan/);
+  });
+}
+
+for (const [description, protocols] of [
+  ['mixed VLESS and plaintext Trojan', { ev: 'yes', et: 'yes' }],
+  ['plaintext VLESS', { ev: 'yes', et: 'no' }]
+]) {
+  test(`residential subscriptions retain compatible fronts for ${description}`, async t => {
+    const { worker } = await loadWorker(t, { globals: { fetch: residentialResponse } });
+    const plaintextEnv = environment({ jk: 'yes', yx: '192.0.2.10:80', dkby: 'no',
+      ...protocols, ex: 'no' });
+    const response = await request(worker, plaintextEnv, path);
+    assert.equal(response.status, 200, await response.clone().text());
+    const config = parse(await response.text());
+    const front = config.proxies.filter(node => node.type !== 'openvpn');
+    assert.equal(front.length, 1);
+    assert.equal(front[0].type, 'vless');
+    assert.equal(front[0].tls, false);
+    assert.equal(front[0].port, 80);
+    const frontGroup = config['proxy-groups'].find(group => group.name === '⚡ CF前置');
+    assert.deepEqual(frontGroup.proxies, [front[0].name]);
+    assert.ok(config.proxies.filter(node => node.type === 'openvpn')
+      .every(node => node['dialer-proxy'] === frontGroup.name));
+  });
+}
+
 test('concurrent residential requests share one source fetch', async t => {
   const started = deferred();
   const gate = deferred();

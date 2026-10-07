@@ -15,14 +15,18 @@ export function getConfigStore(binding) {
   let readError = null;
   let writes = Promise.resolve();
 
-  async function read() {
-    if (loadedAt !== null && Date.now() - loadedAt < cacheTTL) return snapshot;
-    if (pendingRead) return pendingRead;
+  async function read(forceFull = false) {
+    if (!forceFull && loadedAt !== null && Date.now() - loadedAt < cacheTTL) return snapshot;
+    if (forceFull) {
+      // A pending subscription refresh may only check the version key. Writes
+      // must wait for it and then fetch c themselves before merging changes.
+      while (pendingRead) await pendingRead;
+    } else if (pendingRead) return pendingRead;
     pendingRead = (async () => {
       try {
         let nextVersion = '';
         try { nextVersion = await binding.get('c_ver') || ''; } catch {}
-        if (refreshedAt !== null && Date.now() - refreshedAt < fullRefreshTTL
+        if (!forceFull && refreshedAt !== null && Date.now() - refreshedAt < fullRefreshTTL
           && nextVersion && nextVersion === version) {
           loadedAt = Date.now();
           readError = null;
@@ -58,7 +62,10 @@ export function getConfigStore(binding) {
     },
     update(transform) {
       const result = writes.then(async () => {
-        const current = await read();
+        // Avoid rolling back an already completed save from another isolate
+        // with our short-lived request cache. KV itself remains eventually
+        // consistent; this is not a cross-isolate transaction.
+        const current = await read(true);
         // Reads may serve the last good snapshot during an outage. Writes must
         // not overwrite unknown or newer KV data with that fallback snapshot.
         if (readError) throw new Error('KV configuration unavailable', { cause: readError });
