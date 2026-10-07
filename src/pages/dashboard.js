@@ -57,13 +57,14 @@ export function renderDashboard(request, token, { config = defaults, kvEnabled =
   <a class="brand" href="#subscription"><span class="brand-icon">${logo}</span><span><span class="brand-name">CFnew</span><span class="brand-caption">CONNECTION CONSOLE</span></span></a>
   <p class="nav-caption">${t('工作空间', 'فضای کار')}</p>
   <nav class="nav" aria-label="${t('主导航', 'ناوبری اصلی')}">${Object.entries(titles).map(([id, title]) => `<a href="#${id}" data-nav="${id}">${icon(id)}<span>${title}</span></a>`).join('')}</nav>
-  <div class="sidebar-footer"><a href="https://github.com/byJoey/cfnew" target="_blank" rel="noopener noreferrer">${t('项目与文档', 'پروژه و مستندات')} ↗</a><span class="version">v4.0.3 · UI 2026.10</span></div>
+  <div class="sidebar-footer"><a href="https://github.com/byJoey/cfnew" target="_blank" rel="noopener noreferrer">${t('项目与文档', 'پروژه و مستندات')} ↗</a><span class="version">v4.0.4 · UI 2026.10</span></div>
 </aside>
 <div class="shell">
   <header class="topbar"><div class="breadcrumb"><span>CFnew</span><span>/</span><strong id="breadcrumb">${titles.subscription}</strong></div>
   <div class="toolbar"><span class="badge" id="configBadge">${t('配置已读取', 'تنظیمات خوانده شد')}</span>
     <button type="button" id="themeToggle" class="icon-button" aria-label="${t('切换外观', 'تغییر ظاهر')}" title="${t('切换外观', 'تغییر ظاهر')}">${icon('theme')}</button>
-    <select id="languageSelector" class="language" aria-label="${t('语言', 'زبان')}"><option value="zh" ${fa ? '' : 'selected'}>中文</option><option value="fa" ${fa ? 'selected' : ''}>فارسی</option></select></div>
+    <select id="languageSelector" class="language" aria-label="${t('语言', 'زبان')}"><option value="zh" ${fa ? '' : 'selected'}>中文</option><option value="fa" ${fa ? 'selected' : ''}>فارسی</option></select>
+    <button type="button" id="logout" class="text-button">${t('退出登录', 'خروج')}</button></div>
   </header>
   <main id="main" class="content">
     <div class="page-heading"><div><h1 id="pageTitle">${titles.subscription}</h1><p id="pageDescription" class="muted">${descriptions.subscription}</p></div><button class="btn" id="refreshConfig" type="button">↻ ${t('刷新配置', 'تازه‌سازی تنظیمات')}</button></div>
@@ -101,8 +102,8 @@ export function renderDashboard(request, token, { config = defaults, kvEnabled =
           ${field('wk', t('指定地区', 'انتخاب منطقه'), '', { options: [['', t('自动 / 官方直连', 'خودکار / مستقیم')], ...[['HK','香港','هنگ‌کنگ'],['US','美国','آمریکا'],['SG','新加坡','سنگاپور'],['JP','日本','ژاپن'],['KR','韩国','کره'],['DE','德国','آلمان'],['SE','瑞典','سوئد'],['NL','荷兰','هلند'],['FI','芬兰','فنلاند'],['GB','英国','بریتانیا']].map(([id, zh, persian]) => [id, `${id} · ${t(zh, persian)}`])] })}
         </div></div>
         <div class="card" style="margin-top:20px">${heading(t('DNS 与加密', 'DNS و رمزنگاری'), t('与当前订阅生成逻辑保持一致。', 'مطابق منطق تولید اشتراک فعلی.'))}
-          <div class="switch-group">${toggle('ech', t('启用 ECH', 'فعال‌سازی ECH'), t('从 DoH 获取 ECH 配置，同时强制仅生成 TLS 节点。', 'دریافت ECH از DoH و فقط نودهای TLS.'))}</div>
-          <div class="field-row">${field('customDNS', t('DoH 服务器', 'سرور DoH'), t('用于 ECH 查询及 Clash 主 DNS。', 'برای ECH و DNS اصلی Clash.'), { placeholder: defaults.customDNS })}${field('customECHDomain', t('ECH 域名', 'دامنه ECH'), '', { placeholder: defaults.customECHDomain })}</div>
+          <div class="switch-group">${toggle('ech', t('启用 ECH', 'فعال‌سازی ECH'), t('支持的客户端读取 ECH 参数并查询配置；开启后仅生成 TLS 节点。', 'کلاینت‌های سازگار پارامترهای ECH را می‌خوانند و تنظیمات را دریافت می‌کنند؛ فقط نودهای TLS تولید می‌شوند.'))}</div>
+          <div class="field-row">${field('customDNS', t('DNS 地址', 'آدرس DNS'), t('支持 HTTP(S)、TLS、QUIC、UDP、域名与 IPv6，供客户端 DNS 配置使用。', 'HTTP(S)، TLS، QUIC، UDP، دامنه و IPv6 برای تنظیم DNS کلاینت پشتیبانی می‌شوند.'), { placeholder: defaults.customDNS })}${field('customECHDomain', t('ECH 域名', 'دامنه ECH'), '', { placeholder: defaults.customECHDomain })}</div>
         </div>
       </section>
       <section data-panel="preferred" hidden aria-label="${titles.preferred}">

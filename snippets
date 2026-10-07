@@ -8,7 +8,8 @@ function 解码64(文本) {
 }
 
 // --- 硬编码配置 ---
-const 认证令牌 = 'f64bdc57-0f54-4705-bf75-cfd646d98c06';
+// 部署前填写自己的 UUID，留空或使用旧公开示例令牌时返回 503。
+let 认证令牌 = '';
 let 回退地址 = '';
 const 代理5配置 = '';
 // 手动指定地区（留空则自动检测，可选值：US、SG、JP、HK、KR、DE、SE、NL、FI、GB）
@@ -23,6 +24,8 @@ const 启用仓库优选 = true;
 const 启用其他优选 = true;
 // API地址配置（订阅转换服务）
 const 订阅转换接口 = 解码64('aHR0cHM6Ly91cmwudjEubWsvc3Vi');
+
+认证令牌 = typeof 认证令牌 === 'string' ? 认证令牌.trim().toLowerCase() : '';
 
 const 直连域名列表 = [
   { name: "cloudflare.182682.xyz", domain: "cloudflare.182682.xyz" },
@@ -158,6 +161,12 @@ function 解析地址和端口(输入) {
 
 export default {
   async fetch(请求, 环境, 上下文) {
+    if (!是否有效格式(认证令牌) || /^(?:2541f8d4-d157-46af-9169-0025bf435fbc|f64bdc57-0f54-4705-bf75-cfd646d98c06)$/i.test(认证令牌)) {
+      return new Response('请在文件顶部配置自己的有效 UUID 认证令牌；旧公开示例令牌不可使用。', {
+        status: 503,
+        headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' }
+      });
+    }
     try {
       const 网址 = new URL(请求.url);
 

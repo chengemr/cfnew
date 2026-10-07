@@ -73,7 +73,8 @@ export function generateNodeLinks(settings, nodes, user, workerHost, nameNode, e
     for (const node of nodes) {
       const host = normalizeHost(node.ip);
       const address = host.includes(':') ? `[${host}]` : host;
-      const ports = transport === 'xhttp' ? [{ port: node.port || 443, tls: true }]
+      const ports = transport === 'xhttp'
+        ? (plainPorts.has(node.port) ? [] : [{ port: node.port || 443, tls: true }])
         : portsFor(node, settings, explicitPorts);
       for (const { port, tls } of ports) {
         const query = parameters(protocol, transport, user, workerHost, tls, settings);

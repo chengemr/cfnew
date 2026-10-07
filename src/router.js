@@ -1,5 +1,5 @@
 export function isUUID(字符串) {
-  const 用户正则 = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const 用户正则 = /^(?:[0-9a-f]{32}|[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})$/i;
   return 用户正则.test(字符串);
 }
 
@@ -17,10 +17,11 @@ export function resolveManagementRoute(路径, 自定义路径值, 令牌) {
   const 后缀 = 请求路径 === 基础路径 ? '' : 请求路径.startsWith(基础路径 + '/') ? 请求路径.slice(基础路径.length) : null;
   const 路由 = {
     '': 'page', '/sub': 'subscription', '/api/config': 'config',
-    '/api/preferred-ips': 'preferred', '/region': 'region', '/test-api': 'test'
+    '/api/preferred-ips': 'preferred', '/region': 'region', '/test-api': 'test',
+    '/api/login': 'login', '/api/logout': 'logout'
   }[后缀];
   if (路由) return 路由;
-  if (请求路径.endsWith('/api/config') || 请求路径.endsWith('/api/preferred-ips')) return 'invalid-api';
+  if (['/api/config', '/api/preferred-ips', '/api/login', '/api/logout'].some(suffix => 请求路径.endsWith(suffix))) return 'invalid-api';
   const 首段 = 请求路径.split('/')[1];
   if (isUUID(首段) && (自定义基础路径 || 首段 !== 令牌)) return 'denied';
   return null;

@@ -148,6 +148,7 @@
     busy = value;
     $('refreshConfig').disabled = value;
     $('resetConfig').disabled = value;
+    $('logout').disabled = value;
     syncControls();
   }
   function validate(diff) {
@@ -162,7 +163,7 @@
     if ('d' in diff && diff.d && new URL(normalizedBase(diff.d), location.origin).pathname !== normalizedBase(diff.d)) {
       throw new Error(t('管理路径请使用 URL 可直接使用的字符，例如 /my/panel。', 'مسیر باید از نویسه‌های مجاز URL استفاده کند؛ مانند /my/panel.'));
     }
-    for (const key of ['homepage', 'yxURL', 'customDNS', 'scu']) {
+    for (const key of ['homepage', 'yxURL', 'scu']) {
       if (!(key in diff) || !diff[key]) continue;
       let url;
       try { url = new URL(diff[key]); } catch { throw new Error(key + t(' 必须是完整 URL。', ' باید URL کامل باشد.')); }
@@ -246,6 +247,17 @@
   $('discardChanges').addEventListener('click', () => hydrate(saved));
   $('refreshConfig').addEventListener('click', refreshConfig);
   $('refreshStatus').addEventListener('click', refreshRegion);
+  $('logout').addEventListener('click', async () => {
+    if (busy) return;
+    if (Object.keys(changes()).length && !confirm(t('退出将丢弃未保存的更改，是否继续？', 'تغییرات ذخیره‌نشده حذف می‌شوند؛ خارج شوید؟'))) return;
+    setBusy(true);
+    try {
+      await requestJSON('/api/logout', {});
+      hydrate(saved);
+      location.replace('/');
+    } catch (error) { toast(error.message, true); }
+    finally { setBusy(false); }
+  });
   $('resetConfig').addEventListener('click', () => {
     if (confirm(t('移除页面管理的 KV 配置并恢复环境变量与默认设置？', 'تنظیمات KV حذف و محیط و پیش‌فرض‌ها بازگردانده شود؟'))) void saveConfig(true);
   });

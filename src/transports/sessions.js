@@ -46,7 +46,8 @@ export async function handleWebSocket(request, 配置快照) {
   };
   let 是否域名系统值 = false;
   let 协议类型 = null;
-  let drainingUpload = false;
+  let drainingWriter = null;
+  let replayUpload = null;
   let 传输值 = false;
   let pendingBytes = 0;
   const 值队列 = createUploadQueue(传输上传包大小, 传输上传队列上限, 传输上传队列上限 >> 8);
@@ -70,6 +71,7 @@ export async function handleWebSocket(request, 配置快照) {
     传输值 = true;
     clearTimeout(authenticationTimer);
     pendingBytes = 0;
+    replayUpload = null;
     连接取消.abort();
     值队列.clear();
     处理值远程写入器();
@@ -95,6 +97,39 @@ export async function handleWebSocket(request, 配置快照) {
     clearTimeout(authenticationTimer);
     releaseInput(headerBytes);
   }
+  // Until the first reply, a retry owns every accepted upload byte, including
+  // completed writes. These reservations share the same bounded entry budget.
+  function rememberUpload(data) {
+    if (!replayUpload || !data.byteLength) return;
+    const length = replayUpload.bytes + data.byteLength;
+    if (length > replayUpload.data.byteLength) {
+      const buffer = new Uint8Array(Math.min(传输上传队列上限,
+        Math.max(length, replayUpload.data.byteLength * 2)));
+      buffer.set(replayUpload.data.subarray(0, replayUpload.bytes));
+      replayUpload.data = buffer;
+    }
+    replayUpload.data.set(data, replayUpload.bytes);
+    replayUpload.bytes = length;
+  }
+  remote.startReplay = data => {
+    replayUpload = { data: new Uint8Array(1024), bytes: 0, written: 0 };
+    rememberUpload(data);
+  };
+  remote.prepareReplay = () => {
+    值队列.clear();
+    replayUpload.written = 0;
+    return replayUpload.data.slice(0, replayUpload.bytes);
+  };
+  remote.finishReplay = () => {
+    if (!replayUpload) return;
+    const written = replayUpload.written;
+    replayUpload = null;
+    releaseInput(written);
+  };
+  remote.establishUpload = (bytes, retryable) => {
+    replayUpload.written = bytes;
+    if (!retryable) remote.finishReplay();
+  };
   function 处理队列值(chunk) {
     const data = asBytes(chunk);
     if (!data.byteLength) return true;
@@ -102,30 +137,34 @@ export async function handleWebSocket(request, 配置快照) {
       关闭传输();
       return false;
     }
+    rememberUpload(data);
     remote.drainUpload();
     return true;
   }
   async function drainUpload() {
-    if (drainingUpload || 传输值 || !remote.writer) return;
-    drainingUpload = true;
+    const writer = remote.writer;
+    if (传输值 || !writer || drainingWriter === writer) return;
+    drainingWriter = writer;
     try {
       for (;;) {
-        if (传输值 || !remote.writer) break;
+        if (传输值 || remote.writer !== writer) break;
         const data = 值队列.bundle();
         if (!data) break;
         remote.onUpload?.(data);
-        await remote.writer.write(data);
-        releaseInput(data.byteLength);
+        await writer.write(data);
+        if (remote.writer !== writer) break;
+        if (replayUpload) replayUpload.written += data.byteLength;
+        else releaseInput(data.byteLength);
       }
     } catch {
-      关闭传输();
+      if (remote.writer === writer) 关闭传输();
     } finally {
-      drainingUpload = false;
-      if (!值队列.empty && !传输值 && remote.writer) queueMicrotask(drainUpload);
+      if (drainingWriter === writer) drainingWriter = null;
+      if (!值队列.empty && !传输值 && remote.writer && drainingWriter !== remote.writer) queueMicrotask(drainUpload);
     }
   }
   remote.drainUpload = () => {
-    if (!drainingUpload && !值队列.empty && remote.writer) queueMicrotask(drainUpload);
+    if (!值队列.empty && remote.writer && drainingWriter !== remote.writer) queueMicrotask(drainUpload);
   };
   const earlyDataHeader = request.headers.get("sec-websocket-protocol") || '';
   // Reserve at the event boundary, before pipeTo can queue behind a pending
@@ -161,13 +200,13 @@ export async function handleWebSocket(request, 配置快照) {
           const responseHeader = new Uint8Array([version[0], 0]);
           const payload = data.subarray(原始索引);
           authenticated('vless', 原始索引);
-          try {
-            if (是否域名系统值) {
+          if (是否域名系统值) {
+            try {
               await forwardDNS(payload, websocket, responseHeader, remote, fetcher, 出站配置, 连接取消.signal);
-            } else {
-              await connectWebSocketTCP(hostname, port, payload, websocket, responseHeader, remote, fetcher, 出站配置, 连接取消.signal);
-            }
-          } finally { releaseInput(payload.byteLength); }
+            } finally { releaseInput(payload.byteLength); }
+          } else {
+            await connectWebSocketTCP(hostname, port, payload, websocket, responseHeader, remote, fetcher, 出站配置, 连接取消.signal);
+          }
           return;
         }
       }
@@ -181,9 +220,7 @@ export async function handleWebSocket(request, 配置快照) {
             rawClientData: 原始客户端数据
           } = 值结果;
           authenticated('trojan', data.byteLength - 原始客户端数据.byteLength);
-          try {
-            await connectWebSocketTCP(hostname, port, 原始客户端数据, websocket, null, remote, fetcher, 出站配置, 连接取消.signal);
-          } finally { releaseInput(原始客户端数据.byteLength); }
+          await connectWebSocketTCP(hostname, port, 原始客户端数据, websocket, null, remote, fetcher, 出站配置, 连接取消.signal);
           return;
         }
       }
@@ -198,8 +235,8 @@ export async function handleWebSocket(request, 配置快照) {
 async function connectWebSocketTCP(主机, 端口数字, 原始数据, websocket, responseHeader, 远程连接值, fetcher, 配置快照, signal) {
   const attempts = outboundAttempts(配置快照, 主机, 端口数字, () => 获取回退目标(
     配置快照.回退地址, 配置快照.当前工作器地区, 配置快照.启用地区匹配, 端口数字));
-  const payload = asBytes(原始数据);
-  async function 连接值发送(address, port, 值代理 = false) {
+  远程连接值.startReplay(asBytes(原始数据));
+  async function 连接值发送(address, port, payload, 值代理 = false) {
     // 走代理时首包交给握手函数在释放写入器前发出，避免换写入器导致连接被重置
     const socket = await dialOutbound(address, port, payload, fetcher, 配置快照.已解析代理5配置, 值代理, signal);
     const writer = socket.writable.getWriter();
@@ -228,7 +265,9 @@ async function connectWebSocketTCP(主机, 端口数字, 原始数据, websocket
     socket.closed.catch(() => {}).finally(() => {
       if (远程连接值.socket === socket) closeWebSocket(websocket);
     });
-    relayToWebSocket(socket, websocket, responseHeader, retry).finally(() => {
+    relayToWebSocket(socket, websocket, responseHeader, retry, () => {
+      if (远程连接值.socket === socket) 远程连接值.finishReplay();
+    }).finally(() => {
       if (远程连接值.socket === socket) {
         try {
           writer.releaseLock();
@@ -242,7 +281,10 @@ async function connectWebSocketTCP(主机, 端口数字, 原始数据, websocket
       const { value: attempt, done } = await attempts.next();
       if (done) { closeWebSocket(websocket); return; }
       try {
-        const { remoteSock, writer } = await 连接值发送(attempt.address, attempt.port, attempt.viaProxy);
+        const payload = 远程连接值.prepareReplay();
+        const { remoteSock, writer } = await 连接值发送(attempt.address, attempt.port, payload, attempt.viaProxy);
+        if (signal.aborted) { remoteSock.close(); return; }
+        远程连接值.establishUpload(payload.byteLength, !!attempt.first);
         处理值远程(remoteSock, writer, attempt.first ? () => {
           处理值值当前(remoteSock, writer);
           connectNext();
@@ -428,7 +470,7 @@ function webSocketReadable(websocket, 值数据头部, reserveInput, signal) {
     }
   });
 }
-async function relayToWebSocket(远程套接字, websocket, 头部数据, 重试值) {
+async function relayToWebSocket(远程套接字, websocket, 头部数据, 重试值, onFirstData) {
   let responseHeader = 头部数据,
     是否有数据 = false,
     failedOrRetried = false;
@@ -461,13 +503,14 @@ async function relayToWebSocket(远程套接字, websocket, 头部数据, 重试
     }
     for (;;) {
       const result = byob ? await reader.read(new Uint8Array(buffer, 0, 传输块大小)) : await reader.read();
-      if (result.done) break;
+      if (result.done || failedOrRetried) break;
       const 读取值 = result.value;
       let chunk = asBytes(读取值);
       const 值缓冲 = byob && 读取值?.buffer instanceof ArrayBuffer && 读取值.buffer.byteLength >= 传输块大小 ? 读取值.buffer : new ArrayBuffer(传输块大小);
       if (!chunk.byteLength) continue;
       if (!是否有数据) {
         是否有数据 = true;
+        onFirstData?.();
         if (首次字节计时器) {
           clearTimeout(首次字节计时器);
           首次字节计时器 = null;

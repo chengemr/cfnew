@@ -7,10 +7,11 @@ import { createContext, SourceTextModule, SyntheticModule } from 'node:vm';
 
 export const UUID = '11111111-1111-4111-8111-111111111111';
 export const ORIGIN = 'https://worker.example';
+export const ADMIN_TOKEN = 'test-management-token-0123456789abcdef0123456789abcdef';
 
 export function environment(overrides = {}) {
   return {
-    u: UUID, ev: 'yes', et: 'yes', ex: 'yes', dkby: 'yes',
+    u: UUID, ADMIN_TOKEN, ev: 'yes', et: 'yes', ex: 'yes', dkby: 'yes',
     epd: 'yes', epi: 'yes', egi: 'no', ena: 'no',
     ...overrides
   };
@@ -73,7 +74,9 @@ export async function loadWorker(t, options = {}) {
 }
 
 export function request(worker, env, path = `/${UUID}/sub`, options) {
-  return worker.fetch(new Request(ORIGIN + path, options), env, {
+  const headers = new Headers(options?.headers);
+  if (!headers.has('Authorization') && env.ADMIN_TOKEN) headers.set('Authorization', `Bearer ${env.ADMIN_TOKEN}`);
+  return worker.fetch(new Request(ORIGIN + path, { ...options, headers }), env, {
     waitUntil() { throw new Error('Unexpected background task'); }
   });
 }

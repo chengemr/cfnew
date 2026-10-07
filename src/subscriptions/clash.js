@@ -1,5 +1,11 @@
 import { decodeBase64Text as 解码64 } from '../encoding.js';
 import { quoteYaml, normalizeHost, parseShareLink } from './links.js';
+import { SubscriptionCompatibilityError } from './errors.js';
+
+// Mihomo's Trojan transport always enables TLS; only VLESS can use plain WS.
+export function isClashCompatibleNode(node) {
+  return node && (node.proto === 'vless' || node.proto === 'trojan' && node.tls);
+}
 
 export function renderClashNode(数量值596, echDomain) {
   const 行列表595 = [];
@@ -49,7 +55,10 @@ export function renderClashNode(数量值596, echDomain) {
 }
 
 export function generateClash(链接列表588, { dns = 'https://223.5.5.5/dns-query', echDomain = 'cloudflare-ech.com' } = {}) {
-  const 节点列表586 = 链接列表588.map(parseShareLink).filter(数量值585 => 数量值585 && (数量值585.proto === 解码64('dmxlc3M=') || 数量值585.proto === 解码64('dHJvamFu')));
+  const 节点列表586 = 链接列表588.map(parseShareLink).filter(isClashCompatibleNode);
+  if (!节点列表586.length) {
+    throw new SubscriptionCompatibilityError('当前 Clash 格式没有兼容的节点，请启用 VLESS WebSocket 或 TLS Trojan WebSocket。');
+  }
   const 名称列表584 = 节点列表586.map(数量值583 => 数量值583.name);
   const 域名系统值582 = dns || 'https://223.5.5.5/dns-query';
   const 头部581 = [

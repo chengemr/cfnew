@@ -1,5 +1,5 @@
-// CFnew - 终端 v4.0.3
-// 版本: v4.0.3
+// CFnew - 终端 v4.0.4
+// 版本: v4.0.4
 import { decodeBase64Text as 解码64 } from './encoding.js';
 
 import { handleWebSocket, handleXHTTP } from './transports/sessions.js';
@@ -17,6 +17,8 @@ import { normalizePath as 规范化管理路径, resolveManagementRoute as 解�
 import { renderLanding } from './pages/landing.js';
 import { renderDashboard } from './pages/dashboard.js';
 import { generateClash } from './subscriptions/clash.js';
+import { authorizeManagement, handleManagementLogin, handleManagementLogout } from './auth.js';
+import { SubscriptionCompatibilityError } from './subscriptions/errors.js';
 
 const 直连域名列表 = [
   "cloudflare.182682.xyz",
@@ -77,6 +79,14 @@ export default {
       const stored = store ? await store.load() : {};
       const settings = createSettings(env, stored);
       const 管理路由 = 解析管理路由(url.pathname, settings.自定义路径, settings.认证令牌);
+      if (管理路由 === 'login') return await handleManagementLogin(request, env, settings);
+      const managementRequest = ['config', 'preferred', 'logout'].includes(管理路由) ||
+        (!是否网页套接字 && request.method === 'GET' && ['page', 'region', 'test'].includes(管理路由));
+      if (managementRequest) {
+        const denied = await authorizeManagement(request, env, settings, 管理路由 === 'page');
+        if (denied) return denied;
+      }
+      if (管理路由 === 'logout') return handleManagementLogout(request);
       if (管理路由 === 'config') return await handleConfig(request, env, store, stored);
       if (管理路由 === 'preferred') return await handlePreferred(request, env, store, stored);
       if (管理路由 === 'invalid-api' && !是否网页套接字) return Response.json({ error: 'Not Found' }, { status: 404 });
@@ -179,6 +189,9 @@ export default {
         }
       });
     } catch (error) {
+      if (error instanceof SubscriptionCompatibilityError) return new Response(error.message, {
+        status: 422, headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' }
+      });
       return new Response(error.toString(), {
         status: 500
       });
@@ -275,6 +288,7 @@ async function 处理订阅请求(settings, request, token, url = null) {
       try {
         订阅内容 = await generateResidential(最终链接列表, 客户端配置);
       } catch (错误) {
+        if (错误 instanceof SubscriptionCompatibilityError) throw 错误;
         return new Response('家宽节点暂时拉不到：' + (错误 && 错误.message ? 错误.message : 错误) + '\n过几分钟再更新，客户端会先用着上一份。', {
           status: 503,
           headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' }

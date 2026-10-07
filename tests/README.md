@@ -20,11 +20,20 @@ Each test loads a fresh instance of the real Worker module and invokes its
 `fetch` entry point. Cloudflare socket connections and `fetch` network access
 are blocked by default; source tests provide explicit in-memory HTTP fixtures.
 No regression test contacts an external server. KV storage is simulated in memory.
+Management fixtures use an independent `ADMIN_TOKEN` and explicit Bearer headers;
+`management-auth.test.mjs` separately uses unauthenticated requests and signed
+browser cookies to verify subscription isolation, login, expiry, rotation and
+same-origin mutations. Legacy credentials are checked directly from both files.
 
 The tests cover subscription fields, routing, concurrent configuration reads and
 writes, input boundaries, residential subscriptions, outbound DNS policy, proxy
 handshakes, cancellation, and XHTTP lifetime and stream cleanup using a virtual
 clock. The BYOB fixture adapts Cloudflare's readAtLeast extension to Node streams.
+`storage-write-refresh.test.mjs` checks sequential saves in two warm isolates and
+fresh-read failures. `ws-retry-replay.test.mjs` checks complete, bounded upload
+replay and stale-writer callbacks. Subscription compatibility tests reject empty
+Surge conversions, unrepresentable INI passwords and TLS XHTTP on HTTP ports,
+and preserve plain Trojan for Sing-box and escaped residential group names.
 
 `ws-dns-guards.test.mjs` keeps DNS upstream connections open across queries,
 splits TCP length prefixes, combines frames, and verifies unanswered/partial

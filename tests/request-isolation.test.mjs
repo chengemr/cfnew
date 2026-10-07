@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { parse } from 'yaml';
-import { ORIGIN, UUID, environment, loadWorker, mockKV, request, subscription } from './helpers/worker.mjs';
+import { ADMIN_TOKEN, ORIGIN, UUID, environment, loadWorker, mockKV, request, subscription } from './helpers/worker.mjs';
 import { deferred } from './helpers/deferred.mjs';
 import { flush } from './helpers/transports.mjs';
 
@@ -61,6 +61,7 @@ test('a pending configuration POST cannot write to another KV namespace', async 
   const started = deferred();
   const gate = deferred();
   const input = new Request(ORIGIN + configPath, post({ yx: 'changed.example:443' }));
+  input.headers.set('Authorization', `Bearer ${ADMIN_TOKEN}`);
   input.json = async () => { started.resolve(); return gate.promise; };
   const pending = worker.fetch(input, environment({ C: firstKV }));
   await started.promise;
