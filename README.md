@@ -1,4 +1,4 @@
-# CFnew - 终端 v4.0.4
+# CFnew - 终端 v4.0.5
 
 > **⚠️ 重要：部署后请将兼容日期设置为 `2026-01-20`**
 >
@@ -81,6 +81,15 @@ Surge 需要 TLS Trojan；Clash／家宽／INI 会过滤明文 Trojan，Sing-box
 - 应用唤醒：点按钮自动打开对应客户端
 - 自动识别：根据User-Agent自动返回对应格式
 - 多语言：支持中文和波斯语，根据浏览器语言自动切换
+
+## v4.0.5 更新
+
+- Clash／Mihomo 的 `DIRECT` 出口使用独立国内 DoH，避免可直连的境外站点因通用 DNS 的 GeoIP fallback 超时而访问失败。
+- 设置 `direct-nameserver-follow-policy: false`，Apple 默认直连组与客户端追加的 MDPI 等直连规则均适用。
+- 同步首页、管理页版本号和两份单文件部署产物；原订阅链接与 KV 数据格式保持兼容。
+- 更新部署后刷新 Clash Verge 订阅并重启内核。仅开启系统代理且需要校园网 DNS 时，可按上文将直连 DNS 改为 `system://`；客户端 DNS 覆写需同步设置。
+- Node 18/24 下明文／混淆入口各 593 项回归、Chromium 各 20 项和 Mihomo 各 9 项检查通过，新增 Apple HTTP 与 MDPI CONNECT 的 DNS 对照验证。
+- [Release v4.0.5](https://github.com/chengemr/cfnew/releases/tag/v4.0.5) 提供 `Pages.zip`、两种 Worker 和 SHA256 校验文件；详情见 [发布说明](release-notes/v4.0.5.md)。
 
 ## v4.0.4 更新
 
