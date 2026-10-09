@@ -59,3 +59,8 @@ SHA-256 digest. On other platforms, supply an installed binary instead.
 CI runs both artifacts with Chromium and Mihomo, as well as Node 18/24 regression
 checks. These tests use local fixtures; they do not replace a public Worker/Pages
 deployment or public proxy connectivity checks. See CONTRIBUTING.md for details.
+
+The direct-DNS native regression sends an Apple-group HTTP request and a custom
+MDPI-rule CONNECT request through Mihomo. Local resolvers verify that successful
+direct connections bypass both an unavailable fallback and a conflicting website
+DNS policy; the CONNECT payload isolates DNS and tunneling without testing TLS.
