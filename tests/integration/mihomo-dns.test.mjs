@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createSocket } from 'node:dgram';
-import { createServer, get } from 'node:http';
+import { createServer, get, request as httpRequest } from 'node:http';
 import { createServer as tcpServer, connect } from 'node:net';
 import { once } from 'node:events';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
@@ -120,10 +120,10 @@ async function startCore(t, config) {
   throw new Error(`Mihomo did not start: ${log}`);
 }
 
-function fetchImage(proxyPort, imagePort) {
+function fetchImage(proxyPort, imagePort, hostname = 'i0.hdslb.com') {
   return new Promise((resolve, reject) => {
     const req = get({ host: '127.0.0.1', port: proxyPort,
-      path: `http://i0.hdslb.com:${imagePort}/probe.png`, headers: { Host: `i0.hdslb.com:${imagePort}` }
+      path: `http://${hostname}:${imagePort}/probe.png`, headers: { Host: `${hostname}:${imagePort}` }
     }, response => {
       const chunks = [];
       response.on('data', chunk => chunks.push(chunk));
@@ -134,6 +134,94 @@ function fetchImage(proxyPort, imagePort) {
     req.on('error', reject);
   });
 }
+
+// HTTPS system proxies resolve the destination before carrying the TLS payload.
+// A plain fixture payload after CONNECT isolates that DNS/tunnel stage.
+function fetchTunnel(proxyPort, originPort, hostname) {
+  return new Promise((resolve, reject) => {
+    const req = httpRequest({ host: '127.0.0.1', port: proxyPort, method: 'CONNECT',
+      path: `${hostname}:${originPort}`, headers: { Host: `${hostname}:${originPort}` }
+    });
+    req.once('connect', (response, socket, head) => {
+      if (response.statusCode !== 200) {
+        socket.destroy();
+        reject(new Error(`CONNECT returned ${response.statusCode}`));
+        return;
+      }
+      const chunks = [head];
+      socket.on('data', chunk => chunks.push(chunk));
+      socket.once('error', reject);
+      socket.once('end', () => resolve(Buffer.concat(chunks)));
+      socket.setTimeout(2500, () => socket.destroy(new Error('tunnel payload timed out')));
+      socket.end(`GET /probe.png HTTP/1.1\r\nHost: ${hostname}\r\nConnection: close\r\n\r\n`);
+    });
+    req.setTimeout(2500, () => req.destroy(new Error('CONNECT request timed out')));
+    req.once('error', reject);
+    req.end();
+  });
+}
+
+test('Mihomo direct domains use dedicated DNS for the Apple group and custom MDPI rule', async t => {
+  const main = await dnsFixture(t, true);
+  const fallback = await dnsFixture(t, false);
+  const direct = await dnsFixture(t, true);
+  const origin = createServer((_request, response) => {
+    response.writeHead(200, { 'Content-Type': 'image/png', 'Content-Length': image.length });
+    response.end(image);
+  });
+  origin.listen(0, '127.0.0.1');
+  await once(origin, 'listening');
+  t.after(() => new Promise(resolve => origin.close(resolve)));
+  const { worker } = await loadWorker(t);
+  const response = await request(worker, environment({ yx: 'example.com:8443' }), `/${UUID}/sub?target=clash`);
+  const generated = parse(await response.text());
+  const config = { ...generated, 'external-controller': '127.0.0.1:0', 'geo-auto-update': false,
+    ipv6: false, dns: { ...generated.dns, ipv6: false, listen: '127.0.0.1:0',
+      'default-nameserver': ['127.0.0.1'], 'proxy-server-nameserver': [main.address],
+      nameserver: [main.address], fallback: [fallback.address],
+      // A conflicting website policy must not override the direct resolver.
+      'nameserver-policy': { '+.mdpi.com': [fallback.address] },
+      'fallback-filter': { geoip: false, ipcidr: ['127.0.0.0/8'] }
+    },
+    rules: ['DOMAIN-SUFFIX,mdpi.com,DIRECT', 'DOMAIN-SUFFIX,apple.com,🍎 苹果服务', 'MATCH,DIRECT']
+  };
+  delete config['rule-providers'];
+  delete config['geox-url'];
+  delete config.dns['direct-nameserver'];
+  await t.test('without dedicated direct DNS an available main answer still fails', async subtest => {
+    const port = await startCore(subtest, config);
+    const result = await fetchImage(port, origin.address().port, 'www.apple.com').catch(() => null);
+    assert.ok(!result || result.status !== 200);
+    assert.ok(main.queries.length > 0);
+    assert.ok(fallback.queries.length > 0);
+    assert.equal(direct.queries.length, 0);
+  });
+  const previousMainQueries = main.queries.length;
+  const previousFallbackQueries = fallback.queries.length;
+  await t.test('generated direct DNS bypasses fallback and conflicting website policy', async subtest => {
+    assert.ok(generated.dns['direct-nameserver']?.length, 'missing generated direct DNS');
+    assert.equal(generated.dns['direct-nameserver-follow-policy'], false);
+    config.dns['direct-nameserver'] = generated.dns['direct-nameserver'].map(() => direct.address);
+    const port = await startCore(subtest, config);
+    const apple = await fetchImage(port, origin.address().port, 'www.apple.com');
+    assert.equal(apple.status, 200, apple.body.toString());
+    assert.deepEqual(apple.body, image);
+    const mdpi = await fetchTunnel(port, origin.address().port, 'www.mdpi.com');
+    assert.match(mdpi.toString('latin1'), /^HTTP\/1\.1 200 /);
+    assert.deepEqual(mdpi.subarray(mdpi.indexOf('\r\n\r\n') + 4), image);
+    const domains = direct.queries.map(packet => {
+      const labels = [];
+      for (let offset = 12; packet[offset]; offset += packet[offset] + 1) {
+        labels.push(packet.subarray(offset + 1, offset + 1 + packet[offset]).toString());
+      }
+      return labels.join('.');
+    });
+    assert.ok(domains.includes('www.apple.com'));
+    assert.ok(domains.includes('www.mdpi.com'));
+    assert.equal(main.queries.length, previousMainQueries);
+    assert.equal(fallback.queries.length, previousFallbackQueries);
+  });
+});
 
 test('Mihomo image requests bypass unavailable fallback only with the generated CDN policy', async t => {
   const main = await dnsFixture(t, true);
@@ -162,6 +250,8 @@ test('Mihomo image requests bypass unavailable fallback only with the generated 
   delete config['rule-providers'];
   delete config['geox-url'];
   delete config.dns['nameserver-policy'];
+  // Isolate the CDN policy from the independently tested direct resolver.
+  delete config.dns['direct-nameserver'];
   await t.test('without policy the healthy main answer is discarded and the image fails', async t => {
     const port = await startCore(t, config);
     const result = await fetchImage(port, server.address().port).catch(() => null);
@@ -228,6 +318,7 @@ test('Mihomo resolves a proxy domain despite an unavailable website fallback', a
     const apiPort = await freePort();
     const dns = { ...generated.dns, listen: '127.0.0.1:0', ipv6: false,
       'default-nameserver': ['127.0.0.1'], 'nameserver-policy': {},
+      'direct-nameserver': generated.dns['direct-nameserver'].map(() => main.address),
       nameserver: [main.address], fallback: [fallback.address],
       'fallback-filter': { geoip: false, ipcidr: ['127.0.0.0/8'] }
     };

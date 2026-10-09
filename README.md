@@ -37,6 +37,13 @@ npm run test:all
 Pages 更新和兼容性限制见 [PAGES-UPDATE.md](PAGES-UPDATE.md)。
 上述本地检查不能替代实际 Cloudflare 部署与客户端连接验收。
 
+Clash／Mihomo 订阅为 `DIRECT` 出口单独配置国内 DoH，避免境外 IP 触发通用
+fallback 后导致直连超时。Apple 默认直连组与客户端追加的直连规则均适用。
+更新部署文件后重新获取订阅并重启内核；客户端后续扩展或 DNS 覆写可能覆盖这些设置。
+仅开启系统代理时，如校园网直连需要系统 DNS，可在扩展脚本中把
+`config.dns["direct-nameserver"]` 设为 `["system://"]`，并将
+`config.dns["direct-nameserver-follow-policy"]` 设为 `false`。
+
 **管理认证变更：**管理页面和 API 现在需要独立环境密钥 `ADMIN_TOKEN`；
 订阅链接与代理认证继续使用原 UUID／自定义路径，无需更新客户端链接。
 升级前设置 `ADMIN_TOKEN`，缺失或不安全时管理入口返回 503，订阅与代理继续工作。

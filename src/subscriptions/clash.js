@@ -113,6 +113,11 @@ export function generateClash(链接列表588, { dns = 'https://223.5.5.5/dns-qu
     '  proxy-server-nameserver:',
     '    - https://223.5.5.5/dns-query',
     '    - https://119.29.29.29/dns-query',
+    // DIRECT 独立解析，避免可直连的境外站点依赖网站 fallback。
+    '  direct-nameserver:',
+    '    - https://223.5.5.5/dns-query',
+    '    - https://119.29.29.29/dns-query',
+    '  direct-nameserver-follow-policy: false',
     '  nameserver-policy:',
     '    "+.hdslb.com":',
     '      - https://223.5.5.5/dns-query',

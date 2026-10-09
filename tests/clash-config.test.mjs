@@ -12,6 +12,19 @@ async function clash(worker, overrides = {}, target = 'clash') {
 }
 
 for (const target of ['clash', 'clashr', 'stash', 'meta', 'clashmeta']) {
+  test(`${target}: direct domain DNS is independent of website DNS and policy`, async t => {
+    const { worker } = await loadWorker(t);
+    const { config } = await clash(worker, { customDNS: 'https://dns.example/dns-query' }, target);
+    assert.deepEqual(config.dns['direct-nameserver'], [
+      'https://223.5.5.5/dns-query', 'https://119.29.29.29/dns-query'
+    ]);
+    assert.equal(config.dns['direct-nameserver-follow-policy'], false);
+    assert.equal(config.dns.nameserver[0], 'https://dns.example/dns-query');
+    assert.deepEqual(config.dns.fallback, ['https://1.1.1.1/dns-query', 'https://8.8.8.8/dns-query']);
+    assert.equal(config.dns['fallback-filter'].geoip, true);
+    assert.equal(config.dns.ipv6, true);
+  });
+
   test(`${target}: image CDN uses dedicated DNS without changing global fallback`, async t => {
     const { worker } = await loadWorker(t);
     const { config } = await clash(worker, { customDNS: 'https://dns.example/dns-query' }, target);
