@@ -3,6 +3,7 @@ import { decodeBase64Text as 解码64 } from '../encoding.js';
 import { SubscriptionCompatibilityError } from './errors.js';
 import { parseShareLink as 解析值链接, quoteYaml } from './links.js';
 import { renderClashNode, isClashCompatibleNode } from './clash.js';
+import { residentialByteLimit, residentialNodeLimit } from '../limits.js';
 
 const 家宽节点源 = 解码64('aHR0cHM6Ly93d3cudnBuZ2F0ZS5uZXQvYXBpL2lwaG9uZS8=');
 const 家宽节点类型 = 解码64('b3BlbnZwbg==');
@@ -62,6 +63,7 @@ function 解析家宽清单(原文) {
   const 节点列表 = [];
   let 证书 = null;
   for (const 项 of 候选) {
+    if (节点列表.length >= residentialNodeLimit) break;
     let 配置文本 = '';
     try {
       配置文本 = 解家宽配置(项.配置64);
@@ -115,7 +117,7 @@ async function 加载家宽节点() {
       const { response: 响应, bytes } = await fetchBytes(源, {
         headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'text/plain' },
         cf: { cacheTtl: 1800, cacheEverything: true }
-      }, { timeout: 家宽请求超时, maxBytes: Infinity });
+      }, { timeout: 家宽请求超时, maxBytes: residentialByteLimit });
       if (!响应.ok) {
         最后错误 = new Error('节点源返回 ' + 响应.status);
         continue;

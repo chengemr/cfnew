@@ -60,9 +60,14 @@ test('a pending configuration POST cannot write to another KV namespace', async 
   const secondKV = mockKV({ yx: 'second.example:2053' });
   const started = deferred();
   const gate = deferred();
-  const input = new Request(ORIGIN + configPath, post({ yx: 'changed.example:443' }));
+  const body = new ReadableStream({ async pull(controller) {
+    started.resolve();
+    const value = await gate.promise;
+    controller.enqueue(new TextEncoder().encode(JSON.stringify(value)));
+    controller.close();
+  } }, { highWaterMark: 0 });
+  const input = new Request(ORIGIN + configPath, { method: 'POST', body, duplex: 'half' });
   input.headers.set('Authorization', `Bearer ${ADMIN_TOKEN}`);
-  input.json = async () => { started.resolve(); return gate.promise; };
   const pending = worker.fetch(input, environment({ C: firstKV }));
   await started.promise;
   await subscription(worker, environment({ C: secondKV }));

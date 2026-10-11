@@ -74,6 +74,19 @@ async function save(page) {
   await page.waitForFunction(() => document.getElementById('saveState').textContent === '所有更改已保存');
 }
 
+test('management UI saves multiple preferred-source URLs and rejects an invalid second URL', async t => {
+  const { page, binding, go } = await app(t);
+  await go('/#preferred');
+  const sources = 'https://a.example/list, https://b.example/list';
+  await page.locator('#yxURL').fill(sources);
+  await save(page);
+  assert.equal(JSON.parse(binding.data.get('c')).yxURL, sources);
+  await page.locator('#yxURL').fill('https://a.example/list, javascript:alert(1)');
+  await page.locator('#saveConfig').click();
+  await page.waitForFunction(() => document.getElementById('toast').textContent.includes('HTTP(S)'));
+  assert.equal(JSON.parse(binding.data.get('c')).yxURL, sources);
+});
+
 test('old KV data loads; query strings and fragments stay out of subscription URLs', async t => {
   const { page, requests, go, origin } = await app(t);
   await go('/?ignored=1#config');

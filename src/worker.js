@@ -1,5 +1,5 @@
-// CFnew - 终端 v4.0.5
-// 版本: v4.0.5
+// CFnew - 终端 v4.0.6
+// 版本: v4.0.6
 import { decodeBase64Text as 解码64 } from './encoding.js';
 
 import { handleWebSocket, handleXHTTP } from './transports/sessions.js';
@@ -12,13 +12,15 @@ import { getPaddingKeys as 获取叉HTTP填充标识, validatePadding as 校验�
 import { generateSingBox } from './subscriptions/singbox.js';
 import { generateSurge, generateLoon, generateQuantumultX } from './subscriptions/ini.js';
 import { generateResidential } from './subscriptions/residential.js';
-import { createNodeNamer, generateNodeLinks } from './subscriptions/nodes.js';
+import { createNodeNamer, generateNodeLinks, hasNodePort } from './subscriptions/nodes.js';
 import { normalizePath as 规范化管理路径, resolveManagementRoute as 解析管理路由 } from './router.js';
 import { renderLanding } from './pages/landing.js';
 import { renderDashboard } from './pages/dashboard.js';
 import { generateClash } from './subscriptions/clash.js';
 import { authorizeManagement, handleManagementLogin, handleManagementLogout } from './auth.js';
 import { SubscriptionCompatibilityError } from './subscriptions/errors.js';
+import { cachedSource } from './subscriptions/source-cache.js';
+import { preferredNodeLimit, preferredSourceLimit, subscriptionByteLimit } from './limits.js';
 
 const 直连域名列表 = [
   "cloudflare.182682.xyz",
@@ -228,10 +230,21 @@ async function 处理订阅请求(settings, request, token, url = null) {
   const nodeNamer = createNodeNamer();
 
   const 客户端配置 = { dns: settings.自定义域名系统, echDomain: settings.自定义加密客户端问候域名 };
+  let remainingNodes = preferredNodeLimit;
+  const linkBudget = { bytes: subscriptionByteLimit };
   function 添加节点(列表, 显式端口 = false) {
-    const valid = 列表.filter(node => 规范化节点主机(node.ip) &&
-      (node.port == null && !显式端口 || normalizePort(node.port) !== null));
-    最终链接列表.push(...generateNodeLinks(节点设置, valid, token, workerHost, nodeNamer, 显式端口));
+    const valid = [];
+    for (const node of 列表) {
+      if (!remainingNodes) break;
+      if (!规范化节点主机(node.ip) ||
+        !(node.port == null && !显式端口 || normalizePort(node.port) !== null) ||
+        !hasNodePort(节点设置, node, 显式端口)) continue;
+      valid.push(node);
+      remainingNodes--;
+    }
+    for (const link of generateNodeLinks(节点设置, valid, token, workerHost, nodeNamer, 显式端口, linkBudget)) {
+      最终链接列表.push(link);
+    }
   }
   if (settings.启用原生地址) {
     添加节点([{ ip: workerHost, isp: '原生地址' }]);
@@ -321,6 +334,9 @@ async function 处理订阅请求(settings, request, token, url = null) {
     'Content-Type': contentType,
     'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'
   };
+  if (new TextEncoder().encode(订阅内容).byteLength > subscriptionByteLimit) {
+    throw new SubscriptionCompatibilityError('订阅内容超过 4 MiB，请减少节点或缩短配置字段。');
+  }
 
   // 添加ECH状态到响应头
   if (settings.启用加密客户端问候) {
@@ -349,7 +365,7 @@ async function 获取值地址列表(settings) {
   const mobileEnabled = settings.config.ispMobile !== 'no';
   const unicomEnabled = settings.config.ispUnicom !== 'no';
   const telecomEnabled = settings.config.ispTelecom !== 'no';
-  try {
+  const nodes = await cachedSource('builtin-preferred', async () => {
     const timestamp = String(Date.now());
     const seedDigest = await 计算值摘要(解码64('RGRsVHh0TjBzVU91'));
     const requestKey = await 计算值摘要(seedDigest + 解码64('NzBjbG91ZGZsYXJlYXBpa2V5') + timestamp);
@@ -365,31 +381,34 @@ async function 获取值地址列表(settings) {
     const nodes = [];
     for (const groupName of Object.keys(分组线路映射)) {
       const isIPv6 = groupName === 'ipv6';
-      if (isIPv6 && !ipv6Enabled) continue;
-      if (!isIPv6 && !ipv4Enabled) continue;
       const isp = 分组线路映射[groupName];
-      if (isp === '移动' && !mobileEnabled) continue;
-      if (isp === '联通' && !unicomEnabled) continue;
-      if (isp === '电信' && !telecomEnabled) continue;
       const group = groups[groupName];
       const items = group && Array.isArray(group.info) ? group.info : [];
+      let count = 0;
       for (const item of items) {
+        if (count >= preferredNodeLimit) break;
         const address = 规范化节点主机(item && item.ip);
         if (!address) continue;
+        count++;
         nodes.push({
           isp: isp,
           ip: address,
-          colo: ''
+          colo: '',
+          ipv6: isIPv6
         });
       }
     }
     return nodes;
-  } catch {}
-  return [];
+  });
+  return nodes.filter(node => (node.ipv6 ? ipv6Enabled : ipv4Enabled) &&
+    (node.isp !== '移动' || mobileEnabled) &&
+    (node.isp !== '联通' || unicomEnabled) &&
+    (node.isp !== '电信' || telecomEnabled));
 }
 
 async function 获取值解析新地址列表(settings) {
-  const urls = String(settings.优选地址源 || '').split(',').map(url => url.trim()).filter(Boolean);
+  const urls = [...new Set(String(settings.优选地址源 || '').split(',').map(url => url.trim()).filter(Boolean))]
+    .slice(0, preferredSourceLimit);
   const lines = await 获取优选接口(urls, '443', 5000);
   const pattern = /^(\[[\da-fA-F:]+\]|[\d.]+|[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?)*)(?::(\d+))?(?:#(.+))?$/;
   return lines.flatMap(line => {
@@ -401,82 +420,103 @@ async function 获取值解析新地址列表(settings) {
 
 async function 获取优选接口(网址列表, 默认端口 = '443', 超时 = 3000) {
   if (!网址列表?.length) return [];
-  const 结果列表 = new Set();
-  await Promise.allSettled(网址列表.map(async 网址 => {
-    try {
-      const { response: 响应, bytes: 缓冲 } = await fetchBytes(网址, {}, { timeout: 超时 });
-      if (!响应.ok) return;
-      let 文本 = '';
-      try {
-        const 内容类型 = (响应.headers.get('content-type') || '').toLowerCase();
-        const 字符集 = 内容类型.match(/charset=([^\s;]+)/i)?.[1]?.toLowerCase() || '';
-        let 解码器列表 = ['utf-8', 'gb2312'];
-        if (字符集.includes('gb') || 字符集.includes('gbk') || 字符集.includes('gb2312')) {
-          解码器列表 = ['gb2312', 'utf-8'];
-        }
-        let 解码成功 = false;
-        for (const 解码器 of 解码器列表) {
-          try {
-            const 已解码 = new TextDecoder(解码器).decode(缓冲);
-            if (已解码 && 已解码.length > 0 && !已解码.includes('\ufffd')) {
-              文本 = 已解码;
-              解码成功 = true;
-              break;
-            } else if (已解码 && 已解码.length > 0) {
+  const 每源结果 = new Array(网址列表.length);
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.min(4, 网址列表.length) }, async () => {
+    while (next < 网址列表.length) {
+      const index = next++;
+      const 网址 = 网址列表[index];
+      每源结果[index] = await cachedSource('url:' + 网址, async () => {
+        const 结果列表 = new Set();
+        const add = line => {
+          if (line.length > 512 || 结果列表.size >= preferredNodeLimit) return;
+          const match = line.match(/^(\[[\da-fA-F:]+\]|[\d.]+|[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?)*):(\d+)(?:#(.+))?$/);
+          if (match && 规范化节点主机(match[1]) && normalizePort(match[2]) !== null) 结果列表.add(line);
+        };
+        const sourcePort = new URL(网址).searchParams.get('port') || 默认端口;
+        const { response: 响应, bytes: 缓冲 } = await fetchBytes(网址, {}, { timeout: 超时 });
+        if (!响应.ok) return [];
+        let 文本 = '';
+        try {
+          const 内容类型 = (响应.headers.get('content-type') || '').toLowerCase();
+          const 字符集 = 内容类型.match(/charset=([^\s;]+)/i)?.[1]?.toLowerCase() || '';
+          let 解码器列表 = ['utf-8', 'gb2312'];
+          if (字符集.includes('gb') || 字符集.includes('gbk') || 字符集.includes('gb2312')) {
+            解码器列表 = ['gb2312', 'utf-8'];
+          }
+          let 解码成功 = false;
+          for (const 解码器 of 解码器列表) {
+            try {
+              const 已解码 = new TextDecoder(解码器).decode(缓冲);
+              if (已解码 && 已解码.length > 0 && !已解码.includes('\ufffd')) {
+                文本 = 已解码;
+                解码成功 = true;
+                break;
+              } else if (已解码 && 已解码.length > 0) {
+                continue;
+              }
+            } catch {
               continue;
             }
-          } catch {
-            continue;
+          }
+          if (!解码成功) {
+            文本 = new TextDecoder().decode(缓冲);
+          }
+          if (!文本 || 文本.trim().length === 0) {
+            return [];
+          }
+        } catch {
+          return [];
+        }
+        const 行列表 = 文本.trim().split('\n').map(line => line.trim()).filter(行值 => 行值);
+        const 是否值 = 行列表.length > 1 && 行列表[0].includes(',');
+        const 六版地址模式 = /^[^\[\]]*:[^\[\]]*:[^\[\]]/;
+        if (!是否值) {
+          for (const line of 行列表) {
+            if (结果列表.size >= preferredNodeLimit) break;
+            const 井号索引 = line.indexOf('#');
+            const [主机部分, 备注] = 井号索引 > -1 ? [line.substring(0, 井号索引), line.substring(井号索引)] : [line, ''];
+            const { address, port } = 解析地址值端口(主机部分);
+            const host = address.includes(':') ? `[${address}]` : address;
+            add(`${host}:${port || sourcePort}${备注}`);
+          }
+        } else {
+          const 头部列表 = 行列表[0].split(',').map(column => column.trim());
+          const 数据行列表 = 行列表.slice(1);
+          if (头部列表.includes('IP地址') && 头部列表.includes('端口') && 头部列表.includes('数据中心')) {
+            const ipIndex = 头部列表.indexOf('IP地址'),
+              端口索引 = 头部列表.indexOf('端口');
+            const 备注索引 = 头部列表.indexOf('国家') > -1 ? 头部列表.indexOf('国家') : 头部列表.indexOf('城市') > -1 ? 头部列表.indexOf('城市') : 头部列表.indexOf('数据中心');
+            const 传输层安全索引 = 头部列表.indexOf('TLS');
+            for (const line of 数据行列表) {
+              if (结果列表.size >= preferredNodeLimit) break;
+              const columns = line.split(',').map(column => column.trim());
+              if (传输层安全索引 !== -1 && columns[传输层安全索引]?.toLowerCase() !== 'true') continue;
+              const host = 六版地址模式.test(columns[ipIndex]) ? `[${columns[ipIndex]}]` : columns[ipIndex];
+              add(`${host}:${columns[端口索引]}#${columns[备注索引]}`);
+            }
+          } else if (头部列表.some(column => column.includes('IP')) && 头部列表.some(column => column.includes('延迟')) && 头部列表.some(column => column.includes('下载速度'))) {
+            const 地址索引 = 头部列表.findIndex(column => column.includes('IP'));
+            const 延迟索引 = 头部列表.findIndex(column => column.includes('延迟'));
+            const 速度索引 = 头部列表.findIndex(头值 => 头值.includes('下载速度'));
+            const 端口 = sourcePort;
+            for (const 行 of 数据行列表) {
+              if (结果列表.size >= preferredNodeLimit) break;
+              const 列列表 = 行.split(',').map(丙值 => 丙值.trim());
+              const 包裹地址 = 六版地址模式.test(列列表[地址索引]) ? `[${列列表[地址索引]}]` : 列列表[地址索引];
+              add(`${包裹地址}:${端口}#CF优选 ${列列表[延迟索引]}ms ${列列表[速度索引]}MB/s`);
+            }
           }
         }
-        if (!解码成功) {
-          文本 = new TextDecoder().decode(缓冲);
-        }
-        if (!文本 || 文本.trim().length === 0) {
-          return;
-        }
-      } catch {
-        return;
-      }
-      const 行列表 = 文本.trim().split('\n').map(line => line.trim()).filter(行值 => 行值);
-      const 是否值 = 行列表.length > 1 && 行列表[0].includes(',');
-      const 六版地址模式 = /^[^\[\]]*:[^\[\]]*:[^\[\]]/;
-      if (!是否值) {
-        行列表.forEach(line => {
-          const 井号索引 = line.indexOf('#');
-          const [主机部分, 备注] = 井号索引 > -1 ? [line.substring(0, 井号索引), line.substring(井号索引)] : [line, ''];
-          const { address, port } = 解析地址值端口(主机部分);
-          const host = address.includes(':') ? `[${address}]` : address;
-          const defaultPort = new URL(网址).searchParams.get('port') || 默认端口;
-          结果列表.add(`${host}:${port || defaultPort}${备注}`);
-        });
-      } else {
-        const 头部列表 = 行列表[0].split(',').map(column => column.trim());
-        const 数据行列表 = 行列表.slice(1);
-        if (头部列表.includes('IP地址') && 头部列表.includes('端口') && 头部列表.includes('数据中心')) {
-          const ipIndex = 头部列表.indexOf('IP地址'),
-            端口索引 = 头部列表.indexOf('端口');
-          const 备注索引 = 头部列表.indexOf('国家') > -1 ? 头部列表.indexOf('国家') : 头部列表.indexOf('城市') > -1 ? 头部列表.indexOf('城市') : 头部列表.indexOf('数据中心');
-          const 传输层安全索引 = 头部列表.indexOf('TLS');
-          数据行列表.forEach(line => {
-            const columns = line.split(',').map(column => column.trim());
-            if (传输层安全索引 !== -1 && columns[传输层安全索引]?.toLowerCase() !== 'true') return;
-            const host = 六版地址模式.test(columns[ipIndex]) ? `[${columns[ipIndex]}]` : columns[ipIndex];
-            结果列表.add(`${host}:${columns[端口索引]}#${columns[备注索引]}`);
-          });
-        } else if (头部列表.some(column => column.includes('IP')) && 头部列表.some(column => column.includes('延迟')) && 头部列表.some(column => column.includes('下载速度'))) {
-          const 地址索引 = 头部列表.findIndex(column => column.includes('IP'));
-          const 延迟索引 = 头部列表.findIndex(column => column.includes('延迟'));
-          const 速度索引 = 头部列表.findIndex(头值 => 头值.includes('下载速度'));
-          const 端口 = new URL(网址).searchParams.get('port') || 默认端口;
-          数据行列表.forEach(行 => {
-            const 列列表 = 行.split(',').map(丙值 => 丙值.trim());
-            const 包裹地址 = 六版地址模式.test(列列表[地址索引]) ? `[${列列表[地址索引]}]` : 列列表[地址索引];
-            结果列表.add(`${包裹地址}:${端口}#CF优选 ${列列表[延迟索引]}ms ${列列表[速度索引]}MB/s`);
-          });
-        }
-      }
-    } catch {}
+        return Array.from(结果列表);
+      });
+    }
   }));
+  // Fetches run concurrently, but their completion order must not rename nodes.
+  const 结果列表 = new Set();
+  for (const lines of 每源结果) for (const line of lines) {
+    if (结果列表.size >= preferredNodeLimit) break;
+    结果列表.add(line);
+  }
   return Array.from(结果列表);
 }
