@@ -3,12 +3,40 @@ import test from 'node:test';
 import { parse } from 'yaml';
 import { UUID, environment, loadWorker, request } from './helpers/worker.mjs';
 import { deferred } from './helpers/deferred.mjs';
-import { residentialResponse } from './helpers/residential.mjs';
+import { residentialResponse, residentialList } from './helpers/residential.mjs';
 import { timerRuntime } from './helpers/timers.mjs';
 
 const path = `/${UUID}/sub?target=vg`;
 const env = environment({ jk: 'yes', yx: 'example.com:8443', ech: 'yes',
   customECHDomain: 'ech.example' });
+
+for (const mode of ['advertised', 'streaming']) {
+  test(`residential ${mode} responses over 8 MiB are cancelled and preserve HTTP 503`, async t => {
+    const timers = timerRuntime();
+    let cancelled = 0, calls = 0;
+    const { worker } = await loadWorker(t, { globals: { ...timers.globals, fetch() {
+      calls++;
+      return new Response(new ReadableStream({
+        pull(controller) { controller.enqueue(new Uint8Array(8 * 1024 * 1024 + 1)); },
+        cancel() { cancelled++; }
+      }, { highWaterMark: 0 }), { headers: mode === 'advertised' ? { 'Content-Length': String(8 * 1024 * 1024 + 1) } : {} });
+    } } });
+    const response = await request(worker, env, path);
+    assert.equal(response.status, 503);
+    assert.equal(calls, 2);
+    assert.equal(cancelled, 2);
+    assert.equal(timers.pending.size, 0);
+  });
+}
+
+test('large residential lists retain at most 100 complete nodes', async t => {
+  const row = residentialList.split('\n')[1];
+  const { worker } = await loadWorker(t, { globals: { fetch: () => new Response(Array(300).fill(row).join('\n')) } });
+  const response = await request(worker, env, path);
+  assert.equal(response.status, 200);
+  const config = parse(await response.text());
+  assert.equal(config.proxies.filter(node => node.type === 'openvpn').length, 100);
+});
 
 test('residential subscriptions render shared front nodes and ECH settings', async t => {
   const { worker } = await loadWorker(t, { globals: { fetch: residentialResponse } });

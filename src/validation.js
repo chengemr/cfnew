@@ -1,6 +1,7 @@
 import { defaults } from './config.js';
 import { parseProxy } from './transports/proxy.js';
 import { normalizePath } from './router.js';
+import { preferredSourceLimit } from './limits.js';
 
 const switches = new Set(['ev', 'et', 'ex', 'ech', 'ena', 'epd', 'epi', 'egi', 'dkby',
   'ipv4', 'ipv6', 'ispMobile', 'ispUnicom', 'ispTelecom', 'jk', 'ae', 'rm', 'yxby']);
@@ -23,7 +24,9 @@ export function validateConfig(changes) {
     if (key === 'alpn' && !alpnValues.has(value.trim())) return '无效的 ALPN';
     // DNS also supports TLS, QUIC, UDP, bare hosts and IPv6; keep their formats.
     if (['homepage', 'yxURL', 'scu'].includes(key)) {
-      try { if (!['http:', 'https:'].includes(new URL(value).protocol)) return key + ' 仅支持 HTTP(S)'; }
+      const urls = key === 'yxURL' ? value.split(',').map(url => url.trim()).filter(Boolean) : [value];
+      if (!urls.length || urls.length > preferredSourceLimit) return `yxURL 最多 ${preferredSourceLimit} 个来源`;
+      try { if (urls.some(url => !['http:', 'https:'].includes(new URL(url).protocol))) return key + ' 仅支持 HTTP(S)'; }
       catch { return key + ' 必须是完整 URL'; }
     }
     if (key === 's') {

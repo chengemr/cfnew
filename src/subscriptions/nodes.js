@@ -1,6 +1,8 @@
 import { isIPAddress } from '../preferred.js';
 import { normalizeHost } from './links.js';
 import { getPaddingKeys } from '../transports/padding.js';
+import { SubscriptionCompatibilityError } from './errors.js';
+import { subscriptionByteLimit } from '../limits.js';
 
 const plainPorts = new Set([80, 8080, 8880, 2052, 2082, 2086, 2095]);
 
@@ -39,6 +41,11 @@ function portsFor(node, settings, explicit) {
     : [{ port: 443, tls: true }, { port: 80, tls: false }];
 }
 
+export function hasNodePort(settings, node, explicitPorts = false) {
+  return ((settings.启用明文 || settings.启用木马) && portsFor(node, settings, explicitPorts).length > 0) ||
+    (settings.启用扩展传输 && !plainPorts.has(node.port));
+}
+
 function parameters(protocol, transport, user, host, tls, settings) {
   const query = new URLSearchParams();
   if (protocol === 'vless') query.set('encryption', 'none');
@@ -62,14 +69,18 @@ function parameters(protocol, transport, user, host, tls, settings) {
 
 // All sources use the same port/TLS decision and node order. Preserve the
 // existing raw WS query spelling for remote preferred lists.
-export function generateNodeLinks(settings, nodes, user, workerHost, nameNode, explicitPorts = false) {
+export function generateNodeLinks(settings, nodes, user, workerHost, nameNode, explicitPorts = false,
+  budget = { bytes: subscriptionByteLimit }) {
   const protocols = [];
   if (settings.启用明文) protocols.push(['vless', 'ws']);
   if (settings.启用木马) protocols.push(['trojan', 'ws']);
   if (settings.启用扩展传输) protocols.push(['vless', 'xhttp']);
   const links = [];
+  const queries = new Map();
+  const encoder = new TextEncoder();
   for (const [protocol, transport] of protocols) {
     const credential = protocol === 'trojan' ? settings.传输路径 || user : user;
+    const encodedCredential = encodeURIComponent(credential);
     for (const node of nodes) {
       const host = normalizeHost(node.ip);
       const address = host.includes(':') ? `[${host}]` : host;
@@ -77,11 +88,17 @@ export function generateNodeLinks(settings, nodes, user, workerHost, nameNode, e
         ? (plainPorts.has(node.port) ? [] : [{ port: node.port || 443, tls: true }])
         : portsFor(node, settings, explicitPorts);
       for (const { port, tls } of ports) {
-        const query = parameters(protocol, transport, user, workerHost, tls, settings);
-        const serialized = explicitPorts && transport === 'ws'
-          ? [...query].map(([key, value]) => key + '=' + (key === 'path' ? value : encodeURIComponent(value))).join('&')
-          : query.toString();
-        links.push(`${protocol}://${encodeURIComponent(credential)}@${address}:${port}?${serialized}#${encodeURIComponent(nameNode(node))}`);
+        const key = `${protocol}:${transport}:${tls}`;
+        if (!queries.has(key)) {
+          const query = parameters(protocol, transport, user, workerHost, tls, settings);
+          queries.set(key, explicitPorts && transport === 'ws'
+            ? [...query].map(([key, value]) => key + '=' + (key === 'path' ? value : encodeURIComponent(value))).join('&')
+            : query.toString());
+        }
+        const link = `${protocol}://${encodedCredential}@${address}:${port}?${queries.get(key)}#${encodeURIComponent(nameNode(node))}`;
+        budget.bytes -= encoder.encode(link).byteLength + 1;
+        if (budget.bytes < 0) throw new SubscriptionCompatibilityError('订阅内容超过 4 MiB，请减少节点或缩短配置字段。');
+        links.push(link);
       }
     }
   }

@@ -1,4 +1,5 @@
 import { normalizePath } from './router.js';
+import { readRequestText } from './http.js';
 
 const cookieName = 'cfnew_admin_session';
 const sessionSeconds = 8 * 60 * 60;
@@ -76,40 +77,6 @@ function cookieHeader(request, value, maxAge) {
     (new URL(request.url).protocol === 'https:' ? '; Secure' : '');
 }
 
-async function readLoginBody(request) {
-  const reader = request.body?.getReader();
-  if (!reader) return '';
-  let timer;
-  const timeout = new Promise((_, reject) => {
-    timer = setTimeout(() => {
-      const error = new DOMException('Login request timed out.', 'TimeoutError');
-      reader.cancel(error).catch(() => {});
-      reject(error);
-    }, 5_000);
-  });
-  try {
-    return await Promise.race([(async () => {
-      const chunks = [];
-      let size = 0;
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        size += value.byteLength;
-        if (size > 4096) throw new Error('Login request too large.');
-        chunks.push(value);
-      }
-      const bytes = new Uint8Array(size);
-      let offset = 0;
-      for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
-      return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
-    })(), timeout]);
-  } finally {
-    clearTimeout(timer);
-    reader.cancel().catch(() => {});
-    try { reader.releaseLock(); } catch {}
-  }
-}
-
 export async function authorizeManagement(request, env, settings, page = false) {
   const secret = managementSecret(env, settings);
   if (!secret) return failure('Configure a separate ADMIN_TOKEN (32–256 letters, digits, _ or -) to enable management.', 503);
@@ -145,10 +112,10 @@ export async function handleManagementLogin(request, env, settings) {
       request.body?.cancel().catch(() => {});
       return failure('Invalid login request.', 400);
     }
-    const body = await readLoginBody(request);
+    const body = await readRequestText(request);
     token = JSON.parse(body)?.token;
   } catch (error) {
-    return failure(error.name === 'TimeoutError' ? error.message : 'Invalid login request.', error.name === 'TimeoutError' ? 408 : 400);
+    return failure(error.status === 408 ? 'Login request timed out.' : 'Invalid login request.', error.status === 408 ? 408 : 400);
   }
   if (typeof token !== 'string' || token.length > 256 || !sameSecret(token, secret)) {
     return failure('Invalid management credential.', 401);

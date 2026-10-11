@@ -165,9 +165,13 @@
     }
     for (const key of ['homepage', 'yxURL', 'scu']) {
       if (!(key in diff) || !diff[key]) continue;
-      let url;
-      try { url = new URL(diff[key]); } catch { throw new Error(key + t(' 必须是完整 URL。', ' باید URL کامل باشد.')); }
-      if (!['http:', 'https:'].includes(url.protocol)) throw new Error(key + t(' 仅支持 HTTP(S)。', ' فقط HTTP(S).'));
+      const urls = key === 'yxURL' ? diff[key].split(',').map(url => url.trim()).filter(Boolean) : [diff[key]];
+      if (!urls.length || urls.length > 16) throw new Error(t('最多 16 个优选来源。', 'حداکثر ۱۶ منبع.'));
+      for (const value of urls) {
+        let url;
+        try { url = new URL(value); } catch { throw new Error(key + t(' 必须是完整 URL。', ' باید URL کامل باشد.')); }
+        if (!['http:', 'https:'].includes(url.protocol)) throw new Error(key + t(' 仅支持 HTTP(S)。', ' فقط HTTP(S).'));
+      }
     }
     if ('yx' in diff) diff.yx = diff.yx.split(/[\r\n,]+/).map(line => line.trim()).filter(Boolean).join(',');
     return diff;

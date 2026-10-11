@@ -20,6 +20,13 @@ Each test loads a fresh instance of the real Worker module and invokes its
 `fetch` entry point. Cloudflare socket connections and `fetch` network access
 are blocked by default; source tests provide explicit in-memory HTTP fixtures.
 No regression test contacts an external server. KV storage is simulated in memory.
+
+`subscription-optimization.test.mjs` covers source caching, concurrent loads,
+expiry and bounded stale fallback, current request filtering, source-order
+stability, concurrency and cache limits, and the 45,000-node regression.
+`management-body.test.mjs` exercises real streaming request bodies, deadlines,
+advertised and actual byte limits, reader/timer cleanup and atomic batch limits.
+Residential tests also check oversized body cancellation and bounded YAML output.
 Management fixtures use an independent `ADMIN_TOKEN` and explicit Bearer headers;
 `management-auth.test.mjs` separately uses unauthenticated requests and signed
 browser cookies to verify subscription isolation, login, expiry, rotation and

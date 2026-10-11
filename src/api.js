@@ -1,8 +1,14 @@
 import { normalizeSwitch, resolveConfig } from './config.js';
 import { isIPAddress, isDomain, normalizePort, parsePreferredList, serializePreferredList } from './preferred.js';
 import { validateConfig, validatePreferredName } from './validation.js';
+import { readRequestText, BodyReadError } from './http.js';
+import { managementByteLimit, preferredBatchLimit } from './limits.js';
 
 const badRequest = message => Response.json({ success: false, error: message, message }, { status: 400 });
+const readFailure = error => error instanceof BodyReadError
+  ? Response.json({ success: false, error: error.message, message: error.message }, { status: error.status })
+  : badRequest('无效的 JSON');
+const readJSON = async request => JSON.parse(await readRequestText(request, { maxBytes: managementByteLimit }));
 
 export async function handleConfig(request, env, store, snapshot) {
   if (request.method !== 'GET' && request.method !== 'POST') {
@@ -18,7 +24,7 @@ export async function handleConfig(request, env, store, snapshot) {
   }
   try {
     let changes;
-    try { changes = await request.json(); } catch { return badRequest('无效的 JSON'); }
+    try { changes = await readJSON(request); } catch (error) { return readFailure(error); }
     const invalid = validateConfig(changes);
     if (invalid) return badRequest(invalid);
     const saved = await store.update(config => {
@@ -50,10 +56,11 @@ export async function handlePreferred(request, env, store, snapshot) {
   }
   try {
     let body;
-    try { body = await request.json(); } catch { return badRequest('无效的 JSON'); }
+    try { body = await readJSON(request); } catch (error) { return readFailure(error); }
     if (request.method === 'POST') {
       const items = Array.isArray(body) ? body : [body];
       if (!items.length) return Response.json({ success: false, error: '请求数据为空', message: '请提供IP数据' }, { status: 400 });
+      if (items.length > preferredBatchLimit) return badRequest(`单批最多 ${preferredBatchLimit} 个优选节点`);
       const added = [], skipped = [], errors = [];
       // Validate the complete batch before any KV update; never partially save
       // malformed inputs or names containing the legacy list separators.
@@ -70,17 +77,21 @@ export async function handlePreferred(request, env, store, snapshot) {
         message: '请求包含无效节点，未保存', data: { errors } }, { status: 400 });
       await store.update(stored => {
         const list = parsePreferredList(resolveConfig(env, stored).yx);
+        const known = new Set(list.map(node => `${node.ip}:${node.port}`));
         for (const item of items) {
           const port = normalizePort(item.port, 443);
-          if (list.some(node => node.ip === item.ip && node.port === port)) {
+          const key = `${item.ip}:${port}`;
+          if (known.has(key)) {
             skipped.push({ ip: item.ip, port, reason: '已存在' });
             continue;
           }
           const node = { ip: item.ip, port, name: item.name || `API优选-${item.ip}:${port}`,
             addedAt: new Date().toISOString() };
           list.push(node);
+          known.add(key);
           added.push(node);
         }
+        if (list.length > preferredBatchLimit) throw new BodyReadError(`优选列表最多 ${preferredBatchLimit} 个节点`, 413);
         if (added.length) return { ...stored, yx: serializePreferredList(list) };
       });
       return Response.json({ success: added.length > 0, message: `成功添加 ${added.length} 个IP`,
@@ -108,6 +119,7 @@ export async function handlePreferred(request, env, store, snapshot) {
       message: `${body.ip}:${port} 未找到` }, { status: 404 });
     return Response.json({ success: true, message: '优选IP已删除', deleted: { ip: body.ip, port } });
   } catch (error) {
+    if (error instanceof BodyReadError) return readFailure(error);
     return Response.json({ success: false, error: '处理请求失败', message: error.message }, { status: 500 });
   }
 }
