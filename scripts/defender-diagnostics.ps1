@@ -1,7 +1,8 @@
 param(
     [ValidatePattern('^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$')]
     [string]$Repository = 'chengemr/cfnew',
-    [string]$ReportDirectory = (Join-Path $env:TEMP 'cfnew-defender-report')
+    [string]$ReportDirectory = (Join-Path $env:TEMP 'cfnew-defender-report'),
+    [switch]$EnhanceProtection
 )
 
 # Run only on an isolated, disposable Windows runner. Samples are never executed.
@@ -147,7 +148,13 @@ try {
     # Use Defender's documented CUSTOM-SCAN -DisableRemediation option. Its
     # own -? help explains that file exclusions are ignored, archives are
     # scanned, detections are printed, and remediation/event/UI logging is not
-    # performed for that scan. Do not change realtime/cloud/exclusion policy.
+    # performed for that scan. The optional enhanced mode restores protection
+    # disabled by the hosted image, only on this disposable diagnostic runner.
+    if ($EnhanceProtection) {
+        try {
+            Set-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Policies\Microsoft\Windows Advanced Threat Protection' -Name ForceDefenderPassiveMode -Value 0 -ErrorAction Stop
+        } catch { $script:PreparationErrors += 'Restore active-mode policy: ' + $_.Exception.Message }
+    }
     try {
         $service = Get-Service WinDefend -ErrorAction Stop
         if ($service.Status -ne 'Running') {
@@ -155,6 +162,26 @@ try {
             Start-Service WinDefend -ErrorAction Stop
         }
     } catch { $script:PreparationErrors += 'Start WinDefend: ' + $_.Exception.Message }
+    if ($EnhanceProtection) {
+        # Never weaken protection or change sample-submission consent. Remove
+        # only the stock image's whole-volume exclusions covering the samples.
+        if ((Get-MpPreference -ErrorAction Stop).SubmitSamplesConsent -ne 2) {
+            throw 'This diagnostic requires the existing NeverSend (2) sample policy; automatic sample submission will not be enabled.'
+        }
+        foreach ($setting in @('DisableArchiveScanning','DisableScriptScanning','DisableIOAVProtection','DisableRealtimeMonitoring','DisableBehaviorMonitoring','DisableBlockAtFirstSeen')) {
+            try { $arguments = @{ ErrorAction = 'Stop' }; $arguments[$setting] = $false; Set-MpPreference @arguments }
+            catch { $script:PreparationErrors += ('Enable ' + $setting + ': ' + $_.Exception.Message) }
+        }
+        try { Set-MpPreference -MAPSReporting Advanced -ErrorAction Stop }
+        catch { $script:PreparationErrors += 'Enable cloud protection: ' + $_.Exception.Message }
+        try {
+            $existing = @((Get-MpPreference -ErrorAction Stop).ExclusionPath)
+            foreach ($path in $existing) {
+                if ($path -match '^[CcDd]:\\?$') { Remove-MpPreference -ExclusionPath $path -ErrorAction Stop }
+            }
+        } catch { $script:PreparationErrors += 'Remove whole-volume sample exclusion: ' + $_.Exception.Message }
+        Start-Sleep -Seconds 5
+    }
     try { Update-MpSignature -ErrorAction Stop }
     catch { $script:PreparationErrors += 'Update signatures: ' + $_.Exception.Message }
 
@@ -183,12 +210,26 @@ try {
     if (-not $status.AMEngineVersion -or -not $status.AntivirusSignatureVersion -or $status.AntivirusSignatureVersion -eq '0.0.0.0') { $missing += 'Engine/signatures missing' }
     if ($status.DefenderSignaturesOutOfDate) { $missing += 'Security intelligence is out of date' }
     if (([string]$help.Stdout + [string]$help.Stderr) -notmatch '\-DisableRemediation') { $missing += 'The installed MpCmdRun help does not advertise -DisableRemediation' }
+    if ($EnhanceProtection) {
+        if ($status.AMRunningMode -ne 'Normal' -or -not $status.AntivirusEnabled) { $missing += 'Defender is not in normal active antivirus mode' }
+        if (-not $status.RealTimeProtectionEnabled -or -not $status.IoavProtectionEnabled -or -not $status.BehaviorMonitorEnabled) { $missing += 'Realtime, IOAV or behavior protection is not active' }
+        foreach ($setting in @('DisableArchiveScanning','DisableScriptScanning','DisableIOAVProtection','DisableRealtimeMonitoring','DisableBehaviorMonitoring','DisableBlockAtFirstSeen')) {
+            if ($prefs.$setting) { $missing += ($setting + ' remains enabled') }
+        }
+        if (-not $prefs.MAPSReporting) { $missing += 'Cloud protection remains disabled' }
+        if ($prefs.SubmitSamplesConsent -ne 2) { $missing += 'NeverSend (2) sample policy is not intact' }
+        if ($maps.ExitCode -ne 0) { $missing += 'Defender cloud connectivity validation failed' }
+        if ((Test-ExclusionResult $rootExclusion) -ne 'not_excluded') { $missing += 'The sample directory is excluded or exclusion status is unknown' }
+    }
     $script:Ready = ($missing.Count -eq 0)
     Write-JsonReport 'readiness.json' ([ordered]@{ Ready = $script:Ready; Missing = $missing; MpCmdRun = $script:MpPath;
         MapsConnectivityExitCode = $maps.ExitCode; SampleSubmissionConsent = $prefs.SubmitSamplesConsent;
         ScanMode = 'CustomScan -DisableRemediation: ignore file exclusions and scan archives; no remediation or detection event/UI entry for this scan. Raw console output is primary evidence.';
-        Caveat = 'This hosted Server engine is not the user device. Cloud/model/reputation, definitions, realtime and script policies can differ. Existing realtime, cloud, exclusion and sample-submission policies are not changed.' })
+        EnhancedProtection = [bool]$EnhanceProtection;
+        BlockAtFirstSightAvailable = ([bool]$prefs.MAPSReporting -and -not $prefs.DisableBlockAtFirstSeen -and $prefs.SubmitSamplesConsent -in @(1,3));
+        Caveat = 'This hosted Server engine is not the user device. Enhanced mode enables MAPS connectivity plus realtime/IOAV/script/archive scanning and removes stock whole-volume exclusions. NeverSend (2) is unchanged, so Block at First Sight sample analysis remains unavailable per Microsoft documentation. No manual sample submission occurs. No-detection cannot prove the user detection false.' })
     if (-not $script:Ready) { throw ('Defender readiness is insufficient: ' + ($missing -join '; ')) }
+    if ($EnhanceProtection) { Add-Type -Path (Join-Path $PSScriptRoot 'defender-attachment.cs') -ErrorAction Stop }
 
     Add-Type -AssemblyName System.Net.Http
     $script:AssetClient = New-Object System.Net.Http.HttpClient
@@ -228,6 +269,14 @@ try {
                     $result.FilePresentAfterWrite = Test-Path -LiteralPath $samplePath
                     try { Set-Content -LiteralPath $samplePath -Stream Zone.Identifier -Value ("[ZoneTransfer]`r`nZoneId=3`r`nHostUrl=" + $asset.browser_download_url) -Encoding ASCII; $result.MarkOfTheWebSet = $true }
                     catch { $result.MarkOfTheWebError = $_.Exception.Message }
+                    if ($EnhanceProtection -and (Test-Path -LiteralPath $samplePath)) {
+                        # Invoke the Windows attachment antivirus check used by
+                        # Chromium downloads. This calls Save only, never Execute.
+                        $result.AttachmentCheck = [CfnewAttachmentDiagnostic]::Save($samplePath, $asset.browser_download_url)
+                        if (Test-Path -LiteralPath $samplePath) {
+                            $result.HashAfterAttachmentCheck = (Get-FileHash -LiteralPath $samplePath -Algorithm SHA256).Hash.ToLowerInvariant()
+                        }
+                    }
                     if (Test-Path -LiteralPath $samplePath) {
                         $exclusion = Invoke-MpDiagnostic ($label + '-exclusion') @('-CheckExclusion','-Path',$samplePath)
                         $result.Exclusion = $exclusion
@@ -249,7 +298,8 @@ try {
                     $names = @([regex]::Matches($scanText, '(?i)\b(?:Trojan(?:Downloader|Proxy|Spy|Clicker|Dropper|Notifier)?|Virus|Worm|Backdoor|Ransom|HackTool|PUA|PWS|Exploit|Behavior|VirTool|Spyware|Adware|BrowserModifier|SoftwareBundler):[A-Za-z0-9_/.!@+\-]+') | ForEach-Object { $_.Value } | Select-Object -Unique)
                     $result.ConsoleThreatNames = $names
                     if ($names.Count -gt 0 -or @($matching | Where-Object { $_.EventId -eq 1116 }).Count -gt 0) { $result.Outcome = 'detection_observed' }
-                    elseif ($result.HashVerifiedBeforeWrite -and -not $result.Error -and $result.Scan -and $result.Scan.ExitCode -eq 0 -and $scanText -match '(?i)Scan\s+finished' -and $result.FilePresentAfterScan) {
+                    elseif ($result.HashVerifiedBeforeWrite -and -not $result.Error -and $result.Scan -and $result.Scan.ExitCode -eq 0 -and $scanText -match '(?i)Scan\s+finished' -and $result.FilePresentAfterScan -and
+                        (-not $EnhanceProtection -or ($result.AttachmentCheck.SaveCalled -and $result.AttachmentCheck.HResult -eq 0 -and $result.HashAfterAttachmentCheck -eq $result.ExpectedSHA256))) {
                         $result.Outcome = 'completed_no_detection_in_this_environment'
                     }
                     $script:Results += [pscustomobject]$result

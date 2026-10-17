@@ -16,14 +16,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-2022, windows-2025]
+        os: [windows-2025]
     steps:
       - uses: actions/checkout@v4
       - name: Scan original published releases with Microsoft Defender
         shell: powershell
         env:
           GH_TOKEN: ${{ github.token }}
-        run: ./scripts/defender-diagnostics.ps1 -Repository $env:GITHUB_REPOSITORY -ReportDirectory "$env:GITHUB_WORKSPACE/defender-report"
+        run: ./scripts/defender-diagnostics.ps1 -Repository $env:GITHUB_REPOSITORY -ReportDirectory "$env:GITHUB_WORKSPACE/defender-report" -EnhanceProtection
       - name: Publish diagnostic evidence as check annotations
         if: always()
         shell: powershell
@@ -34,11 +34,14 @@ jobs:
             if (Test-Path -LiteralPath $path) {
               $value = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
               if ($name -eq 'summary.json') {
-                $value = [ordered]@{ Overall=$value.Overall; Ready=$value.Ready; FatalError=$value.FatalError; PreparationErrors=$value.PreparationErrors; Results=@($value.Results | ForEach-Object {
-                  [ordered]@{ Tag=$_.Tag; Asset=$_.Asset; Outcome=$_.Outcome; Error=$_.Error; ReleaseError=$_.ReleaseError; ExpectedSHA256=$_.ExpectedSHA256; ActualSHA256=$_.ActualSHA256; HashVerifiedBeforeWrite=$_.HashVerifiedBeforeWrite; ConsoleThreatNames=$_.ConsoleThreatNames; Scan=$_.Scan; FilePresentAfterScan=$_.FilePresentAfterScan }
-                }) }
+                foreach ($result in @($value.Results)) {
+                  $item = [ordered]@{ Tag=$result.Tag; Asset=$result.Asset; Outcome=$result.Outcome; Error=$result.Error; ReleaseError=$result.ReleaseError; ExpectedSHA256=$result.ExpectedSHA256; ActualSHA256=$result.ActualSHA256; HashVerifiedBeforeWrite=$result.HashVerifiedBeforeWrite; ConsoleThreatNames=$result.ConsoleThreatNames; AttachmentCheck=$result.AttachmentCheck; HashAfterAttachmentCheck=$result.HashAfterAttachmentCheck; Scan=$result.Scan; FilePresentAfterWrite=$result.FilePresentAfterWrite; FilePresentAfterScan=$result.FilePresentAfterScan; MatchingDetectionEvents=$result.MatchingDetectionEvents }
+                  $message = (ConvertTo-Json -InputObject $item -Depth 10 -Compress).Replace('%','%25').Replace("`r",'%0D').Replace("`n",'%0A')
+                  Write-Host "::notice title=Sample $($result.Tag) $($result.Asset)::$message"
+                }
+                $value = [ordered]@{ Overall=$value.Overall; Ready=$value.Ready; FatalError=$value.FatalError; PreparationErrors=$value.PreparationErrors }
               }
-              $message = ($value | ConvertTo-Json -Depth 10 -Compress).Replace('%','%25').Replace("`r",'%0D').Replace("`n",'%0A')
+              $message = (ConvertTo-Json -InputObject $value -Depth 10 -Compress).Replace('%','%25').Replace("`r",'%0D').Replace("`n",'%0A')
               Write-Host "::notice title=${name}::$message"
             } else {
               Write-Host "::warning title=Missing diagnostic report::$name was not produced"
