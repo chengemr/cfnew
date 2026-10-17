@@ -29,10 +29,15 @@ jobs:
         shell: powershell
         run: |
           $root = Join-Path $env:GITHUB_WORKSPACE 'defender-report'
-          foreach ($name in @('summary.json','readiness.json','defender-after-prepare.json','preparation-errors.json','sample-root-exclusion.json','maps-connectivity.json','positive-control.json')) {
+          # One step permits ten notice annotations: 3 environment/control
+          # reports, 6 individual assets and 1 overall summary.
+          foreach ($name in @('positive-control.json','readiness.json','defender-after-prepare.json','summary.json')) {
             $path = Join-Path $root $name
             if (Test-Path -LiteralPath $path) {
               $value = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
+              if ($name -eq 'positive-control.json') {
+                $value = [ordered]@{ Purpose=$value.Purpose; SHA256=$value.SHA256; DetectionObserved=$value.DetectionObserved; FilePresentAfter=$value.FilePresentAfter; WriteError=$value.WriteError; AttachmentCheck=$value.AttachmentCheck; Events=@($value.Events | ForEach-Object { [ordered]@{ EventId=$_.EventId; Fields=$_.Fields } }) }
+              }
               if ($name -eq 'summary.json') {
                 foreach ($result in @($value.Results)) {
                   $item = [ordered]@{ Tag=$result.Tag; Asset=$result.Asset; Outcome=$result.Outcome; Error=$result.Error; ReleaseError=$result.ReleaseError; ExpectedSHA256=$result.ExpectedSHA256; ActualSHA256=$result.ActualSHA256; HashVerifiedBeforeWrite=$result.HashVerifiedBeforeWrite; ConsoleThreatNames=$result.ConsoleThreatNames; AttachmentCheck=$result.AttachmentCheck; HashAfterAttachmentCheck=$result.HashAfterAttachmentCheck; Exclusion=$result.Exclusion; Scan=$result.Scan; FilePresentAfterWrite=$result.FilePresentAfterWrite; FilePresentAfterScan=$result.FilePresentAfterScan; MatchingDetectionEvents=$result.MatchingDetectionEvents }
