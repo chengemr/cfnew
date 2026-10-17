@@ -1,0 +1,34 @@
+name: Defender release diagnostics
+
+on:
+  push:
+    branches: ['diagnose-defender-v4.0.7']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  defender:
+    name: Defender (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, windows-2025]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Scan original published releases with Microsoft Defender
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./scripts/defender-diagnostics.ps1 -Repository $env:GITHUB_REPOSITORY -ReportDirectory "$env:GITHUB_WORKSPACE/defender-report"
+      - name: Preserve engine state, detections and scan reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: defender-${{ matrix.os }}
+          path: defender-report/
+          if-no-files-found: warn
+          retention-days: 30
