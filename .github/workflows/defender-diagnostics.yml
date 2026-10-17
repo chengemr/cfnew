@@ -24,6 +24,26 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: ./scripts/defender-diagnostics.ps1 -Repository $env:GITHUB_REPOSITORY -ReportDirectory "$env:GITHUB_WORKSPACE/defender-report"
+      - name: Publish diagnostic evidence as check annotations
+        if: always()
+        shell: powershell
+        run: |
+          $root = Join-Path $env:GITHUB_WORKSPACE 'defender-report'
+          foreach ($name in @('summary.json','readiness.json','defender-after-prepare.json','preparation-errors.json')) {
+            $path = Join-Path $root $name
+            if (Test-Path -LiteralPath $path) {
+              $value = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
+              if ($name -eq 'summary.json') {
+                $value = [ordered]@{ Overall=$value.Overall; Ready=$value.Ready; FatalError=$value.FatalError; PreparationErrors=$value.PreparationErrors; Results=@($value.Results | ForEach-Object {
+                  [ordered]@{ Tag=$_.Tag; Asset=$_.Asset; Outcome=$_.Outcome; Error=$_.Error; ReleaseError=$_.ReleaseError; ExpectedSHA256=$_.ExpectedSHA256; ActualSHA256=$_.ActualSHA256; HashVerifiedBeforeWrite=$_.HashVerifiedBeforeWrite; ConsoleThreatNames=$_.ConsoleThreatNames; Scan=$_.Scan; FilePresentAfterScan=$_.FilePresentAfterScan }
+                }) }
+              }
+              $message = ($value | ConvertTo-Json -Depth 10 -Compress).Replace('%','%25').Replace("`r",'%0D').Replace("`n",'%0A')
+              Write-Host "::notice title=$name::$message"
+            } else {
+              Write-Host "::warning title=Missing diagnostic report::$name was not produced"
+            }
+          }
       - name: Preserve engine state, detections and scan reports
         if: always()
         uses: actions/upload-artifact@v4
