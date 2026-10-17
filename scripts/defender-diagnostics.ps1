@@ -200,6 +200,15 @@ try {
     $help = Invoke-MpDiagnostic 'mpcmdrun-help' @('-?')
     $maps = Invoke-MpDiagnostic 'maps-connectivity' @('-ValidateMapsConnection')
     $rootExclusion = Invoke-MpDiagnostic 'sample-root-exclusion' @('-CheckExclusion','-Path',$sampleRoot)
+    if ($EnhanceProtection) {
+        # Native exclusion state can lag a successful preference update. Do not
+        # accept an empty preference list over an explicit native exclusion.
+        for ($attempt = 1; $attempt -le 6 -and (Test-ExclusionResult $rootExclusion) -ne 'not_excluded'; $attempt++) {
+            Start-Sleep -Seconds 10
+            $rootExclusion = Invoke-MpDiagnostic ('exclusion-refresh-' + $attempt) @('-CheckExclusion','-Path',$sampleRoot)
+        }
+        Write-JsonReport 'sample-root-exclusion.json' $rootExclusion
+    }
     $after = Get-DefenderSnapshot
     Write-JsonReport 'defender-after-prepare.json' $after
     Write-JsonReport 'preparation-errors.json' $script:PreparationErrors
@@ -220,7 +229,7 @@ try {
         if (-not $prefs.MAPSReporting) { $missing += 'Cloud protection remains disabled' }
         if ($prefs.SubmitSamplesConsent -ne 2) { $missing += 'NeverSend (2) sample policy is not intact' }
         if ($maps.ExitCode -ne 0) { $missing += 'Defender cloud connectivity validation failed' }
-        if ((Test-ExclusionResult $rootExclusion) -ne 'not_excluded' -and -not $noConfiguredExclusions) { $missing += 'The sample directory is excluded or exclusion status is unknown' }
+        if ((Test-ExclusionResult $rootExclusion) -ne 'not_excluded') { $missing += 'The sample directory is excluded or exclusion status is unknown' }
     }
     $script:Ready = ($missing.Count -eq 0)
     Write-JsonReport 'readiness.json' ([ordered]@{ Ready = $script:Ready; Missing = $missing; MpCmdRun = $script:MpPath;

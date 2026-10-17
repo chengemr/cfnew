@@ -35,7 +35,7 @@ jobs:
               $value = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
               if ($name -eq 'summary.json') {
                 foreach ($result in @($value.Results)) {
-                  $item = [ordered]@{ Tag=$result.Tag; Asset=$result.Asset; Outcome=$result.Outcome; Error=$result.Error; ReleaseError=$result.ReleaseError; ExpectedSHA256=$result.ExpectedSHA256; ActualSHA256=$result.ActualSHA256; HashVerifiedBeforeWrite=$result.HashVerifiedBeforeWrite; ConsoleThreatNames=$result.ConsoleThreatNames; AttachmentCheck=$result.AttachmentCheck; HashAfterAttachmentCheck=$result.HashAfterAttachmentCheck; Scan=$result.Scan; FilePresentAfterWrite=$result.FilePresentAfterWrite; FilePresentAfterScan=$result.FilePresentAfterScan; MatchingDetectionEvents=$result.MatchingDetectionEvents }
+                  $item = [ordered]@{ Tag=$result.Tag; Asset=$result.Asset; Outcome=$result.Outcome; Error=$result.Error; ReleaseError=$result.ReleaseError; ExpectedSHA256=$result.ExpectedSHA256; ActualSHA256=$result.ActualSHA256; HashVerifiedBeforeWrite=$result.HashVerifiedBeforeWrite; ConsoleThreatNames=$result.ConsoleThreatNames; AttachmentCheck=$result.AttachmentCheck; HashAfterAttachmentCheck=$result.HashAfterAttachmentCheck; Exclusion=$result.Exclusion; Scan=$result.Scan; FilePresentAfterWrite=$result.FilePresentAfterWrite; FilePresentAfterScan=$result.FilePresentAfterScan; MatchingDetectionEvents=$result.MatchingDetectionEvents }
                   $message = (ConvertTo-Json -InputObject $item -Depth 10 -Compress).Replace('%','%25').Replace("`r",'%0D').Replace("`n",'%0A')
                   Write-Host "::notice title=Sample $($result.Tag) $($result.Asset)::$message"
                 }
