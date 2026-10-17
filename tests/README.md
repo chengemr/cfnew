@@ -37,8 +37,10 @@ writes, input boundaries, residential subscriptions, outbound DNS policy, proxy
 handshakes, cancellation, and XHTTP lifetime and stream cleanup using a virtual
 clock. The BYOB fixture adapts Cloudflare's readAtLeast extension to Node streams.
 `storage-write-refresh.test.mjs` checks sequential saves in two warm isolates and
-fresh-read failures. `ws-retry-replay.test.mjs` checks complete, bounded upload
-replay and stale-writer callbacks. Subscription compatibility tests reject empty
+fresh-read failures. Management login tests cover custom homepages, dedicated
+login routes, expiry and logout. Subscription optimization tests cover cold-failure
+backoff, stale expiry and source switches. `ws-retry-replay.test.mjs` checks bounded
+TLS ClientHello replay, unsafe application data and stale-writer callbacks. Subscription compatibility tests reject empty
 Surge conversions, unrepresentable INI passwords and TLS XHTTP on HTTP ports,
 and preserve plain Trojan for Sing-box and escaped residential group names.
 

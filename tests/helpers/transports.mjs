@@ -5,6 +5,23 @@ export function vlessHeader(uuid = UUID) {
   return Uint8Array.from([0, ...id, 0, 1, 1, 187, 1, 192, 0, 2, 10]);
 }
 
+export function tlsClientHello({ earlyData = false, records = [] } = {}) {
+  // Structurally valid TLS 1.3-capable ClientHello, with no application bytes.
+  const extensions = [0, 43, 0, 3, 2, 3, 4, ...(earlyData ? [0, 42, 0, 0] : [])];
+  const body = [3, 3, ...Array(32).fill(7), 0, 0, 2, 0x13, 1, 1, 0,
+    extensions.length >> 8, extensions.length & 255, ...extensions];
+  const handshake = Uint8Array.of(1, 0, body.length >> 8, body.length & 255, ...body);
+  const chunks = [];
+  let offset = 0;
+  for (const length of [...records, handshake.length]) {
+    const fragment = handshake.subarray(offset, offset + length);
+    if (!fragment.length) break;
+    chunks.push(Uint8Array.of(22, 3, 1, fragment.length >> 8, fragment.length & 255, ...fragment));
+    offset += fragment.length;
+  }
+  return Uint8Array.from(chunks.flatMap(chunk => [...chunk]));
+}
+
 export function xhttpRequest(packet = vlessHeader()) {
   const stream = new ReadableStream({ type: 'bytes', start(controller) {
     controller.enqueue(packet.slice());

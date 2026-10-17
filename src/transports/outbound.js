@@ -148,21 +148,21 @@ async function raceSockets(address, port, fetcher, 竞速数量, open, close) {
   }, () => {}));
   return winner;
 }
-export function dialOutbound(address, port, data, fetcher, proxy, viaProxy, signal, races = 传输连接竞速数) {
+export function dialOutbound(address, port, data, fetcher, proxy, viaProxy, signal, races = 传输连接竞速数, onPayloadWrite) {
   return withConnectionDeadline(async (open, close) => {
-    if (viaProxy) return connectSOCKS(address, port, proxy, fetcher, data, open);
+    if (viaProxy) return connectSOCKS(address, port, proxy, fetcher, data, open, onPayloadWrite);
     const socket = await raceSockets(address, port, fetcher, races, open, close);
     if (data?.byteLength) {
       const writer = socket.writable.getWriter();
-      try { await writer.write(data); } finally { writer.releaseLock(); }
+      try { onPayloadWrite?.(); await writer.write(data); } finally { writer.releaseLock(); }
     }
     return socket;
   }, signal);
 }
-async function connectSOCKS(address, port, 代理配置, fetcher, 首包数据, open) {
+async function connectSOCKS(address, port, 代理配置, fetcher, 首包数据, open, onPayloadWrite) {
   // 按代理种类分派：隧道走建隧请求，其余保持套接字5 握手
   if (代理配置 && (代理配置.kind === 代理种类_隧道 || 代理配置.kind === 代理种类_安全隧道)) {
-    return connectHTTP(address, port, 代理配置, fetcher, 首包数据, open);
+    return connectHTTP(address, port, 代理配置, fetcher, 首包数据, open, onPayloadWrite);
   }
   const {
     username: username,
@@ -232,7 +232,7 @@ async function connectSOCKS(address, port, 代理配置, fetcher, 首包数据, 
     await 读满(应答长度);
     取走(应答长度);
     // 首包必须在释放写入器之前发出，与握手共用同一个写入器
-    if (首包数据 && 首包数据.byteLength) await writer.write(首包数据);
+    if (首包数据 && 首包数据.byteLength) { onPayloadWrite?.(); await writer.write(首包数据); }
     writer.releaseLock();
     reader.releaseLock();
     // 应答之后若已捎带目标数据，重新挂回流首部，避免丢首包
@@ -248,7 +248,7 @@ function normalizeTarget(address) {
   const 文本 = String(address || '');
   return /^\[.*\]$/.test(文本) ? 文本.slice(1, -1) : 文本;
 }
-async function connectHTTP(address, port, 代理配置, fetcher, payload, open) {
+async function connectHTTP(address, port, 代理配置, fetcher, payload, open, onPayloadWrite) {
   const {
     username: 隧道用户,
     password: 隧道密码,
@@ -309,7 +309,7 @@ async function connectHTTP(address, port, 代理配置, fetcher, payload, open) 
     // 代理在头部之后可能已经捎带了目标数据，需要交还给下游
     const 残留数据 = 缓冲.subarray(头部结束);
     // 首包在释放写入器之前发出
-    if (payload && payload.byteLength) await 写入器.write(payload);
+    if (payload && payload.byteLength) { onPayloadWrite?.(); await 写入器.write(payload); }
     写入器.releaseLock();
     读取器.releaseLock();
     if (残留数据.byteLength) return prependSocket(套接字, 残留数据);

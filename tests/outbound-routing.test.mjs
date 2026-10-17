@@ -2,11 +2,11 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import test from 'node:test';
 import { ORIGIN, UUID, environment, loadWorker } from './helpers/worker.mjs';
-import { flush, requestWithBody, vlessHeader, websocketRuntime, xhttpRequest } from './helpers/transports.mjs';
+import { flush, requestWithBody, vlessHeader, websocketRuntime, xhttpRequest, tlsClientHello } from './helpers/transports.mjs';
 import { timerRuntime } from './helpers/timers.mjs';
 
 const primary = '192.0.2.10';
-const payload = Uint8Array.of(7, 8, 9);
+const payload = tlsClientHello();
 const packet = transport => transport === 'trojan'
   ? Uint8Array.of(...new TextEncoder().encode(createHash('sha224').update(UUID).digest('hex')),
     13, 10, 1, 1, 192, 0, 2, 10, 1, 187, 13, 10, ...payload)

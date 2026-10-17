@@ -1,5 +1,5 @@
-// CFnew - 终端 v4.0.6
-// 版本: v4.0.6
+// CFnew - 终端 v4.0.7
+// 版本: v4.0.7
 import { decodeBase64Text as 解码64 } from './encoding.js';
 
 import { handleWebSocket, handleXHTTP } from './transports/sessions.js';
@@ -127,6 +127,7 @@ export default {
         return await handleWebSocket(request, settings);
       }
       if (request.method === 'GET') {
+        if (管理路由 === 'login-page') return renderLanding(request, settings.自定义路径);
         if (管理路由 === 'region') {
           const 地区信息 = settings.手动工作器地区
             ? { region: settings.手动工作器地区, detectionMethod: '手动指定地区', manualRegion: settings.手动工作器地区 }

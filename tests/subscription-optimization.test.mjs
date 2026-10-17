@@ -46,7 +46,57 @@ test('preferred cache expires, shares failed refreshes, and never extends stale 
   advanceTime(720_000);
   assert.equal((await request(worker, env)).status, 503);
   body = 'recovered.example:443';
+  advanceTime(15_000);
   assert.deepEqual(servers(await subscription(worker, env)), ['recovered.example']);
+});
+
+test('cold source failures back off until the deadline and then recover', async t => {
+  let calls = 0, healthy = false;
+  const { worker, advanceTime } = await loadWorker(t, { globals: { fetch() {
+    calls++;
+    return healthy ? new Response('recovered.example:443') : new Response('fixture outage', { status: 503 });
+  } } });
+  for (let index = 0; index < 5; index++) assert.equal((await request(worker, env)).status, 503);
+  assert.equal(calls, 1, 'consecutive failed subscriptions must not each fetch the same broken source');
+  healthy = true;
+  advanceTime(14_999);
+  assert.equal((await request(worker, env)).status, 503);
+  assert.equal(calls, 1);
+  advanceTime(1);
+  assert.deepEqual(servers(await subscription(worker, env)), ['recovered.example']);
+  assert.equal(calls, 2);
+});
+
+test('failure backoff never serves nodes after their stale lifetime expires', async t => {
+  let calls = 0, healthy = true;
+  const { worker, advanceTime } = await loadWorker(t, { globals: { fetch() {
+    calls++;
+    return healthy ? new Response('edge.example:443') : new Response('fixture outage', { status: 503 });
+  } } });
+  await subscription(worker, env);
+  healthy = false;
+  advanceTime(899_999);
+  assert.deepEqual(servers(await subscription(worker, env)), ['edge.example']);
+  assert.equal(calls, 2);
+  advanceTime(1);
+  assert.equal((await request(worker, env)).status, 503);
+  assert.equal(calls, 2, 'expired stale data must fail during the retry cooldown without another fetch');
+  advanceTime(14_999);
+  healthy = true;
+  assert.deepEqual(servers(await subscription(worker, env)), ['edge.example']);
+  assert.equal(calls, 3);
+});
+
+test('a failing source cooldown does not hide a newly configured source', async t => {
+  const fetched = [];
+  const { worker } = await loadWorker(t, { globals: { fetch(url) {
+    fetched.push(url);
+    return url === source ? new Response('fixture outage', { status: 503 }) : new Response('new.example:443');
+  } } });
+  assert.equal((await request(worker, env)).status, 503);
+  assert.deepEqual(servers(await subscription(worker, { ...env, yxURL: 'https://new.example/list' })), ['new.example']);
+  assert.equal((await request(worker, env)).status, 503);
+  assert.deepEqual(fetched, [source, 'https://new.example/list']);
 });
 
 for (const badBody of ['', 'not a valid node', 'edge.example:65536']) {
