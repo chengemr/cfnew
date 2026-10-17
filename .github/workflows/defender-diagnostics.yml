@@ -39,7 +39,7 @@ jobs:
                 }) }
               }
               $message = ($value | ConvertTo-Json -Depth 10 -Compress).Replace('%','%25').Replace("`r",'%0D').Replace("`n",'%0A')
-              Write-Host "::notice title=$name::$message"
+              Write-Host "::notice title=${name}::$message"
             } else {
               Write-Host "::warning title=Missing diagnostic report::$name was not produced"
             }
