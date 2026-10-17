@@ -205,7 +205,7 @@ try {
     Write-JsonReport 'preparation-errors.json' $script:PreparationErrors
     $status = $after.Status
     $prefs = $after.Preferences
-    $noConfiguredExclusions = (@($prefs.ExclusionPath).Count -eq 0 -and @($prefs.ExclusionExtension).Count -eq 0 -and @($prefs.ExclusionProcess).Count -eq 0 -and $prefs.DisableAutoExclusions)
+    $noConfiguredExclusions = (@($prefs.ExclusionPath | Where-Object { $_ }).Count -eq 0 -and @($prefs.ExclusionExtension | Where-Object { $_ }).Count -eq 0 -and @($prefs.ExclusionProcess | Where-Object { $_ }).Count -eq 0 -and $prefs.DisableAutoExclusions)
     $missing = @()
     if (-not $status.AMServiceEnabled) { $missing += 'Antimalware service is not enabled' }
     if (-not $status.AMEngineVersion -or -not $status.AntivirusSignatureVersion -or $status.AntivirusSignatureVersion -eq '0.0.0.0') { $missing += 'Engine/signatures missing' }
