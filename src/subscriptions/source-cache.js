@@ -12,7 +12,9 @@ export async function cachedSource(key, load) {
     entries.set(key, entry);
     if (entry.value && Date.now() - entry.savedAt < freshTTL) return entry.value;
     if (entry.pending) return entry.pending;
-    if (entry.value && Date.now() < entry.retryAt && Date.now() - entry.savedAt < staleTTL) return entry.value;
+    if (Date.now() < entry.retryAt) {
+      return entry.value && Date.now() - entry.savedAt < staleTTL ? entry.value : [];
+    }
   } else {
     if (entries.size >= capacity) {
       const oldest = [...entries].find(([, candidate]) => !candidate.pending);

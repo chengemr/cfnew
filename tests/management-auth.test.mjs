@@ -30,7 +30,7 @@ for (const customPath of ['', '/private/panel']) {
     assert.deepEqual(C.writes, []);
     const page = await raw(worker, env, path);
     assert.equal(page.status, 302);
-    assert.equal(page.headers.get('Location'), '/');
+    assert.equal(page.headers.get('Location'), path + '/login');
   });
 }
 

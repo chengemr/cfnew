@@ -258,7 +258,7 @@
     try {
       await requestJSON('/api/logout', {});
       hydrate(saved);
-      location.replace('/');
+      location.replace(basePath + '/login');
     } catch (error) { toast(error.message, true); }
     finally { setBusy(false); }
   });

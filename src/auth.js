@@ -1,4 +1,4 @@
-import { normalizePath } from './router.js';
+import { managementBasePath, normalizePath } from './router.js';
 import { readRequestText } from './http.js';
 
 const cookieName = 'cfnew_admin_session';
@@ -91,7 +91,10 @@ export async function authorizeManagement(request, env, settings, page = false) 
   }
   if (!await validSession(request, secret)) {
     if (page && request.method === 'GET') return new Response(null, {
-      status: 302, headers: { Location: '/', 'Cache-Control': 'no-store' }
+      status: 302, headers: {
+        Location: managementBasePath(settings.自定义路径, settings.认证令牌) + '/login',
+        'Cache-Control': 'no-store'
+      }
     });
     return failure('Management authentication required.', 401);
   }

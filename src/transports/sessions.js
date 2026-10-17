@@ -110,14 +110,18 @@ export async function handleWebSocket(request, 配置快照) {
     }
     replayUpload.data.set(data, replayUpload.bytes);
     replayUpload.bytes = length;
+    replayUpload.tls.append(data);
   }
   remote.startReplay = data => {
-    replayUpload = { data: new Uint8Array(1024), bytes: 0, written: 0 };
+    replayUpload = { data: new Uint8Array(1024), bytes: 0, written: 0, established: false, tls: clientHelloReplayClassifier() };
     rememberUpload(data);
   };
+  remote.canReplay = () => !!replayUpload && pendingBytes === replayUpload.bytes &&
+    replayUpload.tls.state === 'safe';
   remote.prepareReplay = () => {
     值队列.clear();
     replayUpload.written = 0;
+    replayUpload.established = false;
     return replayUpload.data.slice(0, replayUpload.bytes);
   };
   remote.finishReplay = () => {
@@ -128,7 +132,8 @@ export async function handleWebSocket(request, 配置快照) {
   };
   remote.establishUpload = (bytes, retryable) => {
     replayUpload.written = bytes;
-    if (!retryable) remote.finishReplay();
+    replayUpload.established = true;
+    if (!retryable || replayUpload.tls.state === 'unsafe') remote.finishReplay();
   };
   function 处理队列值(chunk) {
     const data = asBytes(chunk);
@@ -138,6 +143,10 @@ export async function handleWebSocket(request, 配置快照) {
       return false;
     }
     rememberUpload(data);
+    // Plaintext and early application data must keep their original connection.
+    // Release completed history once replay is ruled out, so large uploads can
+    // continue without consuming the retry buffer until the server replies.
+    if (replayUpload?.established && replayUpload.tls.state === 'unsafe') remote.finishReplay();
     remote.drainUpload();
     return true;
   }
@@ -236,9 +245,9 @@ async function connectWebSocketTCP(主机, 端口数字, 原始数据, websocket
   const attempts = outboundAttempts(配置快照, 主机, 端口数字, () => 获取回退目标(
     配置快照.回退地址, 配置快照.当前工作器地区, 配置快照.启用地区匹配, 端口数字));
   远程连接值.startReplay(asBytes(原始数据));
-  async function 连接值发送(address, port, payload, 值代理 = false) {
+  async function 连接值发送(address, port, payload, 值代理, onPayloadWrite) {
     // 走代理时首包交给握手函数在释放写入器前发出，避免换写入器导致连接被重置
-    const socket = await dialOutbound(address, port, payload, fetcher, 配置快照.已解析代理5配置, 值代理, signal);
+    const socket = await dialOutbound(address, port, payload, fetcher, 配置快照.已解析代理5配置, 值代理, signal, undefined, onPayloadWrite);
     const writer = socket.writable.getWriter();
     return {
       remoteSock: socket,
@@ -277,20 +286,35 @@ async function connectWebSocketTCP(主机, 端口数字, 原始数据, websocket
     });
   }
   async function connectNext() {
+    // Freeze the old connection's history before the first await. New messages
+    // during a retry dial belong only to the replacement connection.
+    let preparedPayload = 远程连接值.prepareReplay();
     while (!signal.aborted) {
       const { value: attempt, done } = await attempts.next();
       if (done) { closeWebSocket(websocket); return; }
+      let payload, payloadWriteStarted = false;
       try {
-        const payload = 远程连接值.prepareReplay();
-        const { remoteSock, writer } = await 连接值发送(attempt.address, attempt.port, payload, attempt.viaProxy);
+        payload = preparedPayload || 远程连接值.prepareReplay();
+        preparedPayload = null;
+        const { remoteSock, writer } = await 连接值发送(attempt.address, attempt.port, payload, attempt.viaProxy,
+          () => { payloadWriteStarted = true; });
         if (signal.aborted) { remoteSock.close(); return; }
         远程连接值.establishUpload(payload.byteLength, !!attempt.first);
         处理值远程(remoteSock, writer, attempt.first ? () => {
+          if (!远程连接值.canReplay()) return false;
           处理值值当前(remoteSock, writer);
           connectNext();
+          return true;
         } : null);
         return;
-      } catch {}
+      } catch {
+        // A rejected write can already have delivered bytes to the target.
+        // Retrying a dial is safe; replaying an unknown application write is not.
+        if (payloadWriteStarted && clientHelloReplayState(payload) !== 'safe') {
+          closeWebSocket(websocket);
+          return;
+        }
+      }
     }
   }
   await connectNext();
@@ -470,6 +494,106 @@ function webSocketReadable(websocket, 值数据头部, reserveInput, signal) {
     }
   });
 }
+// A new TCP connection cannot safely replay arbitrary application bytes. Only
+// an empty connection or one complete ClientHello without TLS 1.3 early_data is
+// eligible, optionally followed by one compatibility CCS. Records and the
+// handshake may span WS messages and TLS records.
+function clientHelloReplayState(data) {
+  const classifier = clientHelloReplayClassifier();
+  classifier.append(data);
+  return classifier.state;
+}
+function clientHelloReplayClassifier() {
+  const record = new Uint8Array(5), prefix = new Uint8Array(4);
+  let headerBytes = 0, remaining = 0, helloBytes = 0, hello = null;
+  let unsafe = false, validated = false, compatibilityCCS = false, empty = true;
+  return {
+    get state() {
+      if (unsafe) return 'unsafe';
+      return empty || validated && !remaining && !headerBytes ? 'safe' : 'incomplete';
+    },
+    append(data) {
+      if (unsafe || !data.byteLength) return;
+      empty = false;
+      for (let offset = 0; offset < data.byteLength && !unsafe;) {
+        if (!remaining) {
+          if (compatibilityCCS) { unsafe = true; break; }
+          const size = Math.min(5 - headerBytes, data.byteLength - offset);
+          record.set(data.subarray(offset, offset + size), headerBytes);
+          headerBytes += size; offset += size;
+          if (record[0] !== (validated ? 20 : 22) || headerBytes > 1 && record[1] !== 3 ||
+            headerBytes > 2 && (record[2] < 1 || record[2] > 3)) { unsafe = true; break; }
+          if (headerBytes < 5) break;
+          remaining = record[3] * 256 + record[4];
+          headerBytes = 0;
+          if (!remaining || remaining > 16384 || validated && (record[2] !== 3 || remaining !== 1)) { unsafe = true; break; }
+          if (offset === data.byteLength) break;
+        }
+        if (validated) {
+          // RFC 8446 compatibility CCS carries exactly one byte, 0x01. It has
+          // no application semantics; encrypted early data remains forbidden.
+          unsafe = data[offset++] !== 1;
+          remaining = 0;
+          compatibilityCCS = true;
+          continue;
+        }
+        if (!hello) {
+          const size = Math.min(4 - helloBytes, remaining, data.byteLength - offset);
+          prefix.set(data.subarray(offset, offset + size), helloBytes);
+          helloBytes += size; offset += size; remaining -= size;
+          if (prefix[0] !== 1) { unsafe = true; break; }
+          if (helloBytes < 4) continue;
+          const expected = 4 + prefix[1] * 65536 + prefix[2] * 256 + prefix[3];
+          if (expected < 45 || expected > 传输上传队列上限) { unsafe = true; break; }
+          hello = new Uint8Array(expected);
+          hello.set(prefix);
+        }
+        const size = Math.min(remaining, data.byteLength - offset, hello.byteLength - helloBytes);
+        hello.set(data.subarray(offset, offset + size), helloBytes);
+        helloBytes += size; offset += size; remaining -= size;
+        if (helloBytes === hello.byteLength) {
+          unsafe = remaining !== 0 || !validReplayClientHello(hello);
+          validated = !unsafe;
+          hello = null;
+        }
+      }
+    }
+  };
+}
+function validReplayClientHello(hello) {
+  const expected = hello.byteLength;
+  if (hello[4] !== 3 || hello[5] < 1 || hello[5] > 3) return false;
+  let offset;
+  // legacy_version, random, session ID, cipher suites and compression methods.
+  const sessionLength = hello[38];
+  if (sessionLength > 32) return false;
+  offset = 39 + sessionLength;
+  if (offset + 2 > expected) return false;
+  const cipherLength = hello[offset] * 256 + hello[offset + 1];
+  if (!cipherLength || cipherLength % 2) return false;
+  offset += 2 + cipherLength;
+  if (offset >= expected) return false;
+  const compressionLength = hello[offset++];
+  if (!compressionLength || offset + compressionLength > expected) return false;
+  offset += compressionLength;
+  if (offset === expected) return true; // TLS 1.2 ClientHello without extensions.
+  if (offset + 2 > expected) return false;
+  const extensionLength = hello[offset] * 256 + hello[offset + 1];
+  offset += 2;
+  if (offset + extensionLength !== expected) return false;
+  const seen = new Set();
+  while (offset < expected) {
+    if (offset + 4 > expected) return false;
+    const type = hello[offset] * 256 + hello[offset + 1];
+    const size = hello[offset + 2] * 256 + hello[offset + 3];
+    // Reject early_data even when its encrypted application records arrive in
+    // another WS message. Duplicate/malformed extensions are also ineligible.
+    if (type === 42 || seen.has(type) || offset + 4 + size > expected) return false;
+    seen.add(type);
+    offset += 4 + size;
+  }
+  return true;
+}
 async function relayToWebSocket(远程套接字, websocket, 头部数据, 重试值, onFirstData) {
   let responseHeader = 头部数据,
     是否有数据 = false,
@@ -479,12 +603,11 @@ async function relayToWebSocket(远程套接字, websocket, 头部数据, 重试
   let 首次字节计时器 = null;
   if (重试值) {
     首次字节计时器 = setTimeout(() => {
-      if (!是否有数据 && !failedOrRetried) {
+      if (!是否有数据 && !failedOrRetried && 重试值()) {
         failedOrRetried = true;
         try {
           远程套接字.close && 远程套接字.close();
         } catch {}
-        重试值();
       }
     }, 首字节超时);
   }
@@ -546,7 +669,7 @@ async function relayToWebSocket(远程套接字, websocket, 头部数据, 重试
     clearTimeout(首次字节计时器);
     首次字节计时器 = null;
   }
-  if (!是否有数据 && !failedOrRetried && 重试值) 重试值();
+  if (!是否有数据 && !failedOrRetried && 重试值 && !重试值()) closeWebSocket(websocket);
 }
 // Count complete TCP DNS frames without buffering or rewriting their contents.
 // Prefixes and bodies can span any number of WS/socket messages.

@@ -10,13 +10,17 @@ export function normalizePath(路径) {
   return 完整路径.length > 1 && 完整路径.endsWith('/') ? 完整路径.slice(0, -1) : 完整路径;
 }
 
+export function managementBasePath(自定义路径值, 令牌) {
+  return normalizePath(自定义路径值) || '/' + 令牌;
+}
+
 export function resolveManagementRoute(路径, 自定义路径值, 令牌) {
   const 请求路径 = normalizePath(路径);
   const 自定义基础路径 = normalizePath(自定义路径值);
-  const 基础路径 = 自定义基础路径 || '/' + 令牌;
+  const 基础路径 = managementBasePath(自定义路径值, 令牌);
   const 后缀 = 请求路径 === 基础路径 ? '' : 请求路径.startsWith(基础路径 + '/') ? 请求路径.slice(基础路径.length) : null;
   const 路由 = {
-    '': 'page', '/sub': 'subscription', '/api/config': 'config',
+    '': 'page', '/login': 'login-page', '/sub': 'subscription', '/api/config': 'config',
     '/api/preferred-ips': 'preferred', '/region': 'region', '/test-api': 'test',
     '/api/login': 'login', '/api/logout': 'logout'
   }[后缀];

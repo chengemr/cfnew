@@ -3,6 +3,10 @@
   const boot = JSON.parse(document.getElementById('boot').textContent);
   const $ = id => document.getElementById(id);
   const t = (zh, fa) => boot.fa ? fa : zh;
+  // The dedicated login URL already contains the route the visitor requested.
+  // Derive it locally so the public page never embeds U or D in its bootstrap.
+  const loginBase = location.pathname.replace(/\/$/, '').match(/^(.*)\/login$/)?.[1];
+  if (loginBase) $('credential').value = boot.customPathMode ? loginBase : loginBase.slice(1);
   try { document.documentElement.dataset.theme = localStorage.getItem('cfnew-theme') === 'light' ? 'light' : 'dark'; } catch {}
   for (const [inputId, buttonId] of [['credential', 'revealCredential'], ['adminToken', 'revealAdminToken']]) {
     $(buttonId).addEventListener('click', () => {

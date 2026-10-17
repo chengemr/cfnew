@@ -29,11 +29,13 @@ if (process.env.CFNEW_QA_FONT_DIR) {
     + ':root{font-family:"Noto Sans SC",Arial,sans-serif}';
 }
 
-async function app(t, { stored = {}, env = {}, kv = true, mobile = false, fa = false, authenticated = true } = {}) {
+async function app(t, { stored = {}, env = {}, kv = true, mobile = false, fa = false, authenticated = true, upstreamHomepage } = {}) {
   const binding = mockKV({ d: '/existing/panel', yx: 'example.com:8443#旧节点',
     s: 'user:password@proxy.example:1080', qj: 'only', ...stored });
   const config = environment({ ex: 'no', egi: 'yes', d: '/env/panel', ...(kv ? { C: binding } : {}), ...env });
-  const { worker } = await loadWorker(t);
+  const { worker } = await loadWorker(t, upstreamHomepage === undefined ? {} : { globals: {
+    fetch: async () => new Response(upstreamHomepage, { headers: { 'Content-Type': 'text/html; charset=utf-8' } })
+  } });
   const requests = [];
   const server = createServer(async (req, res) => {
     try {
@@ -373,9 +375,46 @@ test('logging out removes the management session while keeping subscriptions ava
   const { page, origin, go, context, requests } = await app(t);
   await go();
   await page.locator('#logout').click();
-  await page.waitForURL(origin + '/');
+  await page.waitForURL(origin + '/existing/panel/login');
+  assert.equal(await page.locator('#credential').inputValue(), '/existing/panel');
   assert.equal((await context.cookies()).some(cookie => cookie.name === 'cfnew_admin_session'), false);
   assert.equal((await context.request.get(origin + '/existing/panel/api/config')).status(), 401);
   assert.equal((await context.request.get(origin + '/existing/panel/sub?target=clash')).status(), 200);
   assert.ok(requests.some(request => request.method === 'POST' && request.path === '/existing/panel/api/logout'));
 });
+
+for (const { label, kv, stored, env, base } of [
+  { label: 'UUID', kv: false, env: { d: '' }, base: '/' + UUID },
+  { label: 'custom path', kv: true, stored: { d: '/private/multi/panel/' }, base: '/private/multi/panel' },
+  { label: 'custom path named login', kv: true, stored: { d: '/login' }, base: '/login' }
+]) {
+  test(`custom homepage preserves ${label} browser login, language and logout`, async t => {
+    const { page, origin, config, context, requests } = await app(t, {
+      kv, stored, authenticated: false, env: { ...env, homepage: 'https://homepage.example/' },
+      upstreamHomepage: '<!doctype html><html><body><h1>Custom home</h1></body></html>'
+    });
+    await page.goto(origin + '/');
+    assert.equal(await page.locator('h1').textContent(), 'Custom home');
+    assert.equal(await page.locator('#connectForm').count(), 0);
+    await page.goto(origin + base);
+    await page.waitForURL(origin + base + '/login');
+    assert.equal(await page.locator('#credential').inputValue(), kv ? base : UUID);
+    assert.ok(!(await page.content()).includes(config.ADMIN_TOKEN));
+    await page.locator('#languageSelector').selectOption('fa');
+    await page.waitForFunction(() => document.documentElement.lang === 'fa-IR');
+    assert.equal(new URL(page.url()).pathname, base + '/login');
+    assert.equal(await page.locator('#credential').inputValue(), kv ? base : UUID);
+    await page.locator('#adminToken').fill(config.ADMIN_TOKEN);
+    await page.locator('#connectButton').click();
+    await page.waitForURL(origin + base);
+    assert.equal(await page.locator('html').getAttribute('lang'), 'fa-IR');
+    assert.ok(requests.some(request => request.path === base + '/api/login'));
+    await page.locator('#logout').click();
+    await page.waitForURL(origin + base + '/login');
+    assert.equal(await page.locator('html').getAttribute('lang'), 'fa-IR');
+    assert.equal((await context.cookies()).some(cookie => cookie.name === 'cfnew_admin_session'), false);
+    assert.equal((await context.request.get(origin + base + '/api/config')).status(), 401);
+    await page.goto(origin + '/');
+    assert.equal(await page.locator('h1').textContent(), 'Custom home');
+  });
+}
