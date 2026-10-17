@@ -29,7 +29,7 @@ jobs:
         shell: powershell
         run: |
           $root = Join-Path $env:GITHUB_WORKSPACE 'defender-report'
-          foreach ($name in @('summary.json','readiness.json','defender-after-prepare.json','preparation-errors.json')) {
+          foreach ($name in @('summary.json','readiness.json','defender-after-prepare.json','preparation-errors.json','sample-root-exclusion.json','maps-connectivity.json')) {
             $path = Join-Path $root $name
             if (Test-Path -LiteralPath $path) {
               $value = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json

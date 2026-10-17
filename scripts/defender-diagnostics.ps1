@@ -113,7 +113,7 @@ function Invoke-MpDiagnostic([string]$Label, [string[]]$Arguments) {
 function Test-ExclusionResult($Result) {
     $text = [string]$Result.Stdout + ' ' + [string]$Result.Stderr
     # Preserve raw exit codes; do not assume undocumented CheckExclusion exit semantics.
-    if ($text -match '(?i)\bnot\s+excluded\b') { return 'not_excluded' }
+    if ($text -match '(?i)\bnot\s+excluded\b|\bnot\s+(?:an?\s+exclusion|in\s+the\s+exclusion)') { return 'not_excluded' }
     if ($text -match '(?i)\bis\s+excluded\b') { return 'excluded' }
     return 'unknown'
 }
@@ -205,6 +205,7 @@ try {
     Write-JsonReport 'preparation-errors.json' $script:PreparationErrors
     $status = $after.Status
     $prefs = $after.Preferences
+    $noConfiguredExclusions = (@($prefs.ExclusionPath).Count -eq 0 -and @($prefs.ExclusionExtension).Count -eq 0 -and @($prefs.ExclusionProcess).Count -eq 0 -and $prefs.DisableAutoExclusions)
     $missing = @()
     if (-not $status.AMServiceEnabled) { $missing += 'Antimalware service is not enabled' }
     if (-not $status.AMEngineVersion -or -not $status.AntivirusSignatureVersion -or $status.AntivirusSignatureVersion -eq '0.0.0.0') { $missing += 'Engine/signatures missing' }
@@ -219,13 +220,14 @@ try {
         if (-not $prefs.MAPSReporting) { $missing += 'Cloud protection remains disabled' }
         if ($prefs.SubmitSamplesConsent -ne 2) { $missing += 'NeverSend (2) sample policy is not intact' }
         if ($maps.ExitCode -ne 0) { $missing += 'Defender cloud connectivity validation failed' }
-        if ((Test-ExclusionResult $rootExclusion) -ne 'not_excluded') { $missing += 'The sample directory is excluded or exclusion status is unknown' }
+        if ((Test-ExclusionResult $rootExclusion) -ne 'not_excluded' -and -not $noConfiguredExclusions) { $missing += 'The sample directory is excluded or exclusion status is unknown' }
     }
     $script:Ready = ($missing.Count -eq 0)
     Write-JsonReport 'readiness.json' ([ordered]@{ Ready = $script:Ready; Missing = $missing; MpCmdRun = $script:MpPath;
         MapsConnectivityExitCode = $maps.ExitCode; SampleSubmissionConsent = $prefs.SubmitSamplesConsent;
         ScanMode = 'CustomScan -DisableRemediation: ignore file exclusions and scan archives; no remediation or detection event/UI entry for this scan. Raw console output is primary evidence.';
         EnhancedProtection = [bool]$EnhanceProtection;
+        NoConfiguredFileExclusions = [bool]$noConfiguredExclusions;
         BlockAtFirstSightAvailable = ([bool]$prefs.MAPSReporting -and -not $prefs.DisableBlockAtFirstSeen -and $prefs.SubmitSamplesConsent -in @(1,3));
         Caveat = 'This hosted Server engine is not the user device. Enhanced mode enables MAPS connectivity plus realtime/IOAV/script/archive scanning and removes stock whole-volume exclusions. NeverSend (2) is unchanged, so Block at First Sight sample analysis remains unavailable per Microsoft documentation. No manual sample submission occurs. No-detection cannot prove the user detection false.' })
     if (-not $script:Ready) { throw ('Defender readiness is insufficient: ' + ($missing -join '; ')) }
