@@ -186,6 +186,8 @@ try {
     catch { $script:PreparationErrors += 'Update signatures: ' + $_.Exception.Message }
 
     New-Item -ItemType Directory -Path $sampleRoot -Force | Out-Null
+    $probePath = Join-Path $sampleRoot 'defender-probe.js'
+    [IO.File]::WriteAllText($probePath, '// Harmless Defender exclusion diagnostic probe.')
     $platformRoot = Join-Path $env:ProgramData 'Microsoft\Windows Defender\Platform'
     $platforms = @(Get-ChildItem -LiteralPath $platformRoot -Directory -ErrorAction SilentlyContinue | Sort-Object Name -Descending)
     foreach ($platform in $platforms) {
@@ -199,13 +201,15 @@ try {
     if (-not $script:MpPath) { throw 'MpCmdRun.exe is unavailable; no Defender scan was performed.' }
     $help = Invoke-MpDiagnostic 'mpcmdrun-help' @('-?')
     $maps = Invoke-MpDiagnostic 'maps-connectivity' @('-ValidateMapsConnection')
-    $rootExclusion = Invoke-MpDiagnostic 'sample-root-exclusion' @('-CheckExclusion','-Path',$sampleRoot)
+    # Check an existing FILE: directory status alone does not establish whether
+    # contained files are scanned. Each original asset is also checked below.
+    $rootExclusion = Invoke-MpDiagnostic 'sample-root-exclusion' @('-CheckExclusion','-Path',$probePath)
     if ($EnhanceProtection) {
         # Native exclusion state can lag a successful preference update. Do not
         # accept an empty preference list over an explicit native exclusion.
         for ($attempt = 1; $attempt -le 6 -and (Test-ExclusionResult $rootExclusion) -ne 'not_excluded'; $attempt++) {
             Start-Sleep -Seconds 10
-            $rootExclusion = Invoke-MpDiagnostic ('exclusion-refresh-' + $attempt) @('-CheckExclusion','-Path',$sampleRoot)
+            $rootExclusion = Invoke-MpDiagnostic ('exclusion-refresh-' + $attempt) @('-CheckExclusion','-Path',$probePath)
         }
         Write-JsonReport 'sample-root-exclusion.json' $rootExclusion
     }
@@ -241,6 +245,30 @@ try {
         Caveat = 'This hosted Server engine is not the user device. Enhanced mode enables MAPS connectivity plus realtime/IOAV/script/archive scanning and removes stock whole-volume exclusions. NeverSend (2) is unchanged, so Block at First Sight sample analysis remains unavailable per Microsoft documentation. No manual sample submission occurs. No-detection cannot prove the user detection false.' })
     if (-not $script:Ready) { throw ('Defender readiness is insufficient: ' + ($missing -join '; ')) }
     if ($EnhanceProtection) { Add-Type -Path (Join-Path $PSScriptRoot 'defender-attachment.cs') -ErrorAction Stop }
+    if ($EnhanceProtection) {
+        # Standard, harmless EICAR positive control; never executed, published,
+        # or mixed with the release samples. Require a real detection event so
+        # a silent/skipped antivirus call cannot be mistaken for coverage.
+        $controlPath = Join-Path $sampleRoot 'eicar-positive-control.com.txt'
+        $controlWatermark = Get-EventWatermark
+        $control = [ordered]@{ Purpose = 'Harmless EICAR scanner calibration, not a CFnew asset'; Path = $controlPath }
+        try {
+            $testBytes = [Text.Encoding]::ASCII.GetBytes('X5O!P%@AP[4\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*')
+            $control.SHA256 = Get-ByteHash $testBytes
+            [IO.File]::WriteAllBytes($controlPath, $testBytes)
+        } catch { $control.WriteError = $_.Exception.Message }
+        Start-Sleep -Seconds 3
+        if (Test-Path -LiteralPath $controlPath) {
+            try { $control.AttachmentCheck = [CfnewAttachmentDiagnostic]::Save($controlPath, 'https://www.eicar.org/download/eicar.com.txt') }
+            catch { $control.AttachmentError = $_.Exception.Message }
+            Start-Sleep -Seconds 3
+        }
+        $control.Events = @(Get-DefenderEvents $controlWatermark | Where-Object { $_.EventId -in @(1116,1117) -and $_.Xml -match [regex]::Escape($controlPath) })
+        $control.DetectionObserved = @($control.Events | Where-Object { $_.EventId -eq 1116 }).Count -gt 0
+        $control.FilePresentAfter = Test-Path -LiteralPath $controlPath
+        Write-JsonReport 'positive-control.json' $control
+        if (-not $control.DetectionObserved) { $script:Ready = $false; throw 'Harmless antivirus positive control produced no detection event; realtime/download coverage is unverified.' }
+    }
 
     Add-Type -AssemblyName System.Net.Http
     $script:AssetClient = New-Object System.Net.Http.HttpClient
@@ -310,7 +338,7 @@ try {
                     $result.ConsoleThreatNames = $names
                     if ($names.Count -gt 0 -or @($matching | Where-Object { $_.EventId -eq 1116 }).Count -gt 0) { $result.Outcome = 'detection_observed' }
                     elseif ($result.HashVerifiedBeforeWrite -and -not $result.Error -and $result.Scan -and $result.Scan.ExitCode -eq 0 -and $scanText -match '(?i)Scan\s+finished' -and $result.FilePresentAfterScan -and
-                        (-not $EnhanceProtection -or ($result.AttachmentCheck.SaveCalled -and $result.AttachmentCheck.HResult -eq 0 -and $result.HashAfterAttachmentCheck -eq $result.ExpectedSHA256))) {
+                        (-not $EnhanceProtection -or ($result.AttachmentCheck.SaveCalled -and $result.AttachmentCheck.HResult -eq 0 -and $result.HashAfterAttachmentCheck -eq $result.ExpectedSHA256 -and (Test-ExclusionResult $result.Exclusion) -eq 'not_excluded'))) {
                         $result.Outcome = 'completed_no_detection_in_this_environment'
                     }
                     $script:Results += [pscustomobject]$result
