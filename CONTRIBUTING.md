@@ -1,5 +1,7 @@
 # 开发与验证
 
+> 本项目已于 **2026-10-19** 停止维护，不再处理 Issue 或 Pull Request，也不再提供安全更新。以下内容仅供研究历史代码或自行维护时参考。最后一个正式版本为 [v4.0.7](https://github.com/chengemr/cfnew/releases/tag/v4.0.7)，部署收尾见 [MAINTENANCE.md](MAINTENANCE.md)。
+
 开发使用 Node.js 18 或 24：
 
 ```sh
